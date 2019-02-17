@@ -143,7 +143,7 @@ elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
 	# For systemd-resolved (version 229 and above)
 	MODIFYRESOLVCONF=modify_resolved_manager_old
 	RESTORERESOLVCONF=restore_resolved_manager_old
-elif [ -x /sbin/resolvconf ]; then
+elif [ -x /sbin/resolvconf -a "$(basename $(readlink /sbin/resolvconf))" != 'resolvectl' ]; then
 	# Optional tool on Debian, Ubuntu, Gentoo and FreeBSD
 	MODIFYRESOLVCONF=modify_resolvconf_manager
 	RESTORERESOLVCONF=restore_resolvconf_manager
