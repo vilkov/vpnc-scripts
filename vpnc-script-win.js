@@ -138,7 +138,7 @@ case "connect":
 			var netmasklen = env("CISCO_SPLIT_INC_" + i +
 					 "_MASKLEN");
 			run("route add " + network + " mask " + netmask +
-			     " " + internal_gw);
+			     " " + internal_gw + " if " + env("TUNIDX"));
 		}
 	} else if (REDIRECT_GATEWAY_METHOD > 0) {
 		// Waiting for the interface to be configured before to add routes
