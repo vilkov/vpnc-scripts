@@ -125,7 +125,7 @@ else
 fi
 
 if [ -r /etc/openwrt_release ] && [ -n "$OPENWRT_INTERFACE" ]; then
-        . /etc/functions.sh
+	. /etc/functions.sh
 	include /lib/network
 	MODIFYRESOLVCONF=modify_resolvconf_openwrt
 	RESTORERESOLVCONF=restore_resolvconf_openwrt
@@ -211,7 +211,7 @@ do_ifconfig() {
 		# OpenVPN does the same (gives dest_address for Legacy IP
 		# but not for IPv6).
 		# Only Solaris needs it; hence $ifconfig_syntax_ptpv6
-	        ifconfig "$TUNDEV" inet6 $INTERNAL_IP6_NETMASK $ifconfig_syntax_ptpv6 mtu $MTU up
+		ifconfig "$TUNDEV" inet6 $INTERNAL_IP6_NETMASK $ifconfig_syntax_ptpv6 mtu $MTU up
 	    fi
 	fi
 }
