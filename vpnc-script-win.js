@@ -167,7 +167,7 @@ case "connect":
             echo("Configuring IPv6 networks:");
             if (env("INTERNAL_IP6_NETMASK") && !env("INTERNAL_IP6_NETMASK").match("/128$")) {
             run("netsh interface ipv6 add route " + env("INTERNAL_IP6_NETMASK") +
-                " \"" + env("TUNDEV") + "\" fe80::8 store=active")
+                " \"" + env("TUNDEV") + "\" store=active")
         }
 
             if (env("CISCO_IPV6_SPLIT_INC")) {
@@ -176,12 +176,12 @@ case "connect":
                 var netmasklen = env("CISCO_SPLIT_INC_" + i +
                          "_MASKLEN");
                 run("netsh interface ipv6 add route " + network + "/" +
-                    netmasklen + " \"" + env("TUNDEV") + "\" fe80::8 store=active")
+                    netmasklen + " \"" + env("TUNDEV") + "\" store=active")
             }
         } else {
             echo("Setting default IPv6 route through VPN.");
             run("netsh interface ipv6 add route 2000::/3 \"" + env("TUNDEV") +
-                "\" fe80::8 store=active");
+                "\" store=active");
         }
         echo("IPv6 route configuration done.");
     }
