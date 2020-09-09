@@ -36,6 +36,7 @@
 #* INTERNAL_IP6_DNS             -- IPv6 list of dns servers
 #* CISCO_DEF_DOMAIN             -- default domain name
 #* CISCO_BANNER                 -- banner from server
+#* CISCO_SPLIT_DNS              -- dns search domain list
 #* CISCO_SPLIT_INC              -- number of networks in split-network-list
 #* CISCO_SPLIT_INC_%d_ADDR      -- network address
 #* CISCO_SPLIT_INC_%d_MASK      -- subnet mask (for example: 255.255.255.0)
@@ -129,10 +130,14 @@ if [ -r /etc/openwrt_release ] && [ -n "$OPENWRT_INTERFACE" ]; then
 	include /lib/network
 	MODIFYRESOLVCONF=modify_resolvconf_openwrt
 	RESTORERESOLVCONF=restore_resolvconf_openwrt
-elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
-	# For systemd-resolved (version 229 and above)
+elif [ -x /usr/bin/resolvectl ] && [ ${RESOLVEDENABLED} = 1 ]; then
+	# For systemd-resolved (version 239 and above)
 	MODIFYRESOLVCONF=modify_resolved_manager
 	RESTORERESOLVCONF=restore_resolved_manager
+elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
+	# For systemd-resolved (version 229 and above)
+	MODIFYRESOLVCONF=modify_resolved_manager_old
+	RESTORERESOLVCONF=restore_resolved_manager_old
 elif [ -x /sbin/resolvconf ]; then
 	# Optional tool on Debian, Ubuntu, Gentoo and FreeBSD
 	MODIFYRESOLVCONF=modify_resolvconf_manager
@@ -725,6 +730,14 @@ busctl_set_nameservers() {
 	busctl_call SetLinkDNS 'ia(iay)' ${args}
 }
 
+resolvectl_set_nameservers() {
+	local if_index addresses
+	if_index=$1
+	shift
+	addresses="$@"
+	/usr/bin/resolvectl dns $if_index $addresses
+}
+
 busctl_set_search() {
 	local if_index domains args domain
 	if_index=$1
@@ -737,7 +750,25 @@ busctl_set_search() {
 	busctl_call SetLinkDomains 'ia(sb)' ${args}
 }
 
+resolvectl_set_search() {
+	local if_index domains
+	if_index=$1
+	shift
+	domains="$@"
+	/usr/bin/resolvectl domain $if_index $domains
+}
+
 modify_resolved_manager() {
+	local if_index split_dns_list
+	if_index=$(get_if_index $TUNDEV)
+	split_dns_list=$(echo $CISCO_SPLIT_DNS | tr ',' ' ')
+	resolvectl_set_nameservers $if_index $INTERNAL_IP4_DNS
+	if [ -n "$CISCO_DEF_DOMAIN" ] || [ -n "$split_dns_list" ]; then
+		resolvectl_set_search $if_index $CISCO_DEF_DOMAIN $split_dns_list
+	fi
+}
+
+modify_resolved_manager_old() {
 	local if_index
 	if_index=$(get_if_index $TUNDEV)
 	busctl_set_nameservers $if_index $INTERNAL_IP4_DNS
@@ -747,6 +778,12 @@ modify_resolved_manager() {
 }
 
 restore_resolved_manager() {
+	local if_index
+	if_index=$(get_if_index $TUNDEV)
+	/usr/bin/resolvectl revert $if_index
+}
+
+restore_resolved_manager_old() {
 	local if_index
 	if_index=$(get_if_index $TUNDEV)
 	busctl_call RevertLink 'i' $if_index
