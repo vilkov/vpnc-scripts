@@ -245,6 +245,22 @@ if [ -n "$IPROUTE" ]; then
 		$IPROUTE route flush cache 2>/dev/null
 	}
 
+        set_vpngateway_route_attempt_reconnect() {
+		# We'll attempt to add a host route to the gateway through every route that matches
+		# its address (excluding those through TUNDEV because the goal is to avoid loopback).
+
+		echo "$VPNGATEWAY" | grep -q : && FAMILY=-6 ROOT=::/0 || FAMILY=-4 ROOT=0/0
+		$IPROUTE $FAMILY route show to "$VPNGATEWAY" root "$ROOT" | grep -v "dev $TUNDEV" | cut -d' ' -f2- |
+		while read LINE ; do
+			# We do not want to use 'replace', since a route to the gateway that already
+			# exists is mostly likely the correct one (e.g. the case of a reconnect attempt
+			# after dead-peer detection, but no change in the underlying network devices).
+			# Using "add" will succeed at most once
+			$IPROUTE $FAMILY route add `echo "$VPNGATEWAY $LINE" | fix_ip_get_output` 2>/dev/null && break
+		done
+		$IPROUTE $FAMILY route flush cache 2>/dev/null
+        }
+
 	del_vpngateway_route() {
 		$IPROUTE route $route_syntax_del "$VPNGATEWAY"
 		$IPROUTE route flush cache 2>/dev/null
@@ -368,6 +384,11 @@ else # use route command
 	set_vpngateway_route() {
 		route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`"
 	}
+
+        set_vpngateway_route_attempt_reconnect() {
+		# FIXME: needs implementation similar to IPROUTE version
+		set_vpngateway_route
+        }
 
 	del_vpngateway_route() {
 		route $route_syntax_del -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`"
@@ -1047,6 +1068,10 @@ do_disconnect() {
 	destroy_tun_device
 }
 
+do_attempt_reconnect() {
+        set_vpngateway_route_attempt_reconnect
+}
+
 #### Main
 
 if [ -z "$reason" ]; then
@@ -1075,6 +1100,8 @@ case "$reason" in
 		# be left with a route to the VPN server through the VPN
 		# itself, which would need to be fixed.
 		run_hooks attempt-reconnect
+		do_attempt_reconnect
+		run_hooks post-attempt-reconnect
 		;;
 	reconnect)
 		# After successfully re-establishing the session.
