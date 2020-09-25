@@ -361,7 +361,8 @@ else # use route command
 		# isn't -n supposed to give --numeric output?
 		# apperently not...
 		# Get rid of lines containing IPv6 addresses (':')
-		netstat -r -n | awk '/:/ { next; } /^(default|0\.0\.0\.0)/ { print $2; }'
+		# Get rid of lines for link-local routes (https://superuser.com/a/1067742)
+		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /^(default|0\.0\.0\.0)/ { print $2; }'
 	}
 
 	set_vpngateway_route() {
