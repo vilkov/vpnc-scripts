@@ -378,15 +378,18 @@ else # use route command
 		# apperently not...
 		# Get rid of lines containing IPv6 addresses (':')
 		# Get rid of lines for link-local routes (https://superuser.com/a/1067742)
-		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /^(default|0\.0\.0\.0)/ { print $2; }'
+		# Get rid of lines containing $TUNDEV (we don't want loopback)
+		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /\s'"$TUNDEV"'(\s|$)/ { next; } /^(default|0\.0\.0\.0)/ { print $2; exit; }'
 	}
 
 	set_vpngateway_route() {
+		# Unlike with iproute2, there is no way to determine which current
+		# route(s) match the VPN gateway, so we simply find a default
+		# route and use its gateway.
 		route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`"
 	}
 
         set_vpngateway_route_attempt_reconnect() {
-		# FIXME: needs implementation similar to IPROUTE version
 		set_vpngateway_route
         }
 
