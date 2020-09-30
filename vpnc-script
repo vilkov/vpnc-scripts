@@ -250,7 +250,10 @@ if [ -n "$IPROUTE" ]; then
 		# its address (excluding those through TUNDEV because the goal is to avoid loopback).
 
 		echo "$VPNGATEWAY" | grep -q : && FAMILY=-6 ROOT=::/0 || FAMILY=-4 ROOT=0/0
-		$IPROUTE $FAMILY route show to "$VPNGATEWAY" root "$ROOT" | grep -v "dev $TUNDEV" | cut -d' ' -f2- |
+		# put metric in front, sort by metric, then chop off first two fields (metric and destination)
+		$IPROUTE $FAMILY route show to "$VPNGATEWAY" root "$ROOT" |
+		    awk '/dev '"$TUNDEV"'/ { next; } { printf "%s %s\n", (match($0, /metric ([^ ]+)/) ? substr($0, RSTART+7, RLENGTH-7) : 4294967295), $0; }' |
+		    sort -n | cut -d' ' -f3- |
 		while read LINE ; do
 			# We do not want to use 'replace', since a route to the gateway that already
 			# exists is mostly likely the correct one (e.g. the case of a reconnect attempt
