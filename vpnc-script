@@ -237,7 +237,7 @@ destroy_tun_device() {
 if [ -n "$IPROUTE" ]; then
 	fix_ip_get_output () {
 		sed -e 's/ /\n/g' | \
-		    sed -ne "1 s|\$|${1}|p;/via/{N;p};/dev/{N;p};/src/{N;p};/mtu/{N;p}"
+		    sed -ne "1 s|\$|${1}|p;/via/{N;p};/dev/{N;p};/src/{N;p};/mtu/{N;p};/metric/{N;p}"
 	}
 
 	set_vpngateway_route() {
@@ -258,8 +258,7 @@ if [ -n "$IPROUTE" ]; then
 			# We do not want to use 'replace', since a route to the gateway that already
 			# exists is mostly likely the correct one (e.g. the case of a reconnect attempt
 			# after dead-peer detection, but no change in the underlying network devices).
-			# Using "add" will succeed at most once
-			$IPROUTE $FAMILY route add `echo "$VPNGATEWAY $LINE" | fix_ip_get_output` 2>/dev/null && break
+			$IPROUTE $FAMILY route add `echo "$VPNGATEWAY $LINE" | fix_ip_get_output` 2>/dev/null
 		done
 		$IPROUTE $FAMILY route flush cache 2>/dev/null
         }
