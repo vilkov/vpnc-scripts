@@ -879,7 +879,10 @@ do_connect() {
 		echo
 	fi
 
-	set_vpngateway_route
+	case "$VPNGATEWAY" in
+		127.*|::1) ;; # localhost (probably proxy)
+		*) set_vpngateway_route ;;
+	esac
 	do_ifconfig
 	if [ -n "$CISCO_SPLIT_EXC" ]; then
 		i=0
@@ -887,7 +890,10 @@ do_connect() {
 			eval NETWORK="\${CISCO_SPLIT_EXC_${i}_ADDR}"
 			eval NETMASK="\${CISCO_SPLIT_EXC_${i}_MASK}"
 			eval NETMASKLEN="\${CISCO_SPLIT_EXC_${i}_MASKLEN}"
-			set_exclude_route "$NETWORK" "$NETMASK" "$NETMASKLEN"
+			case "$NETWORK" in
+				0.*|127.*|169.254.*) echo "ignoring non-forwardable exclude route $NETWORK/$NETMASKLEN" >&2 ;;
+				*) set_exclude_route "$NETWORK" "$NETMASK" "$NETMASKLEN" ;;
+			esac
 			i=`expr $i + 1`
 		done
 	fi
