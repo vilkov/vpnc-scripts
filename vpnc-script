@@ -237,13 +237,31 @@ destroy_tun_device() {
 if [ -n "$IPROUTE" ]; then
 	fix_ip_get_output () {
 		sed -e 's/ /\n/g' | \
-		    sed -ne "1 s|\$|${1}|p;/via/{N;p};/dev/{N;p};/src/{N;p};/mtu/{N;p}"
+		    sed -ne "1 s|\$|${1}|p;/via/{N;p};/dev/{N;p};/src/{N;p};/mtu/{N;p};/metric/{N;p}"
 	}
 
 	set_vpngateway_route() {
 		$IPROUTE route add `$IPROUTE route get "$VPNGATEWAY" | fix_ip_get_output`
 		$IPROUTE route flush cache 2>/dev/null
 	}
+
+        set_vpngateway_route_attempt_reconnect() {
+		# We'll attempt to add a host route to the gateway through every route that matches
+		# its address (excluding those through TUNDEV because the goal is to avoid loopback).
+
+		echo "$VPNGATEWAY" | grep -q : && FAMILY=-6 ROOT=::/0 || FAMILY=-4 ROOT=0/0
+		# put metric in front, sort by metric, then chop off first two fields (metric and destination)
+		$IPROUTE $FAMILY route show to "$VPNGATEWAY" root "$ROOT" |
+		    awk '/dev '"$TUNDEV"'/ { next; } { printf "%s %s\n", (match($0, /metric ([^ ]+)/) ? substr($0, RSTART+7, RLENGTH-7) : 4294967295), $0; }' |
+		    sort -n | cut -d' ' -f3- |
+		while read LINE ; do
+			# We do not want to use 'replace', since a route to the gateway that already
+			# exists is mostly likely the correct one (e.g. the case of a reconnect attempt
+			# after dead-peer detection, but no change in the underlying network devices).
+			$IPROUTE $FAMILY route add `echo "$VPNGATEWAY $LINE" | fix_ip_get_output` 2>/dev/null
+		done
+		$IPROUTE $FAMILY route flush cache 2>/dev/null
+        }
 
 	del_vpngateway_route() {
 		$IPROUTE route $route_syntax_del "$VPNGATEWAY"
@@ -362,12 +380,20 @@ else # use route command
 		# apperently not...
 		# Get rid of lines containing IPv6 addresses (':')
 		# Get rid of lines for link-local routes (https://superuser.com/a/1067742)
-		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /^(default|0\.0\.0\.0)/ { print $2; }'
+		# Get rid of lines containing $TUNDEV (we don't want loopback)
+		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /\s'"$TUNDEV"'(\s|$)/ { next; } /^(default|0\.0\.0\.0)/ { print $2; exit; }'
 	}
 
 	set_vpngateway_route() {
+		# Unlike with iproute2, there is no way to determine which current
+		# route(s) match the VPN gateway, so we simply find a default
+		# route and use its gateway.
 		route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`"
 	}
+
+        set_vpngateway_route_attempt_reconnect() {
+		set_vpngateway_route
+        }
 
 	del_vpngateway_route() {
 		route $route_syntax_del -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`"
@@ -1047,6 +1073,10 @@ do_disconnect() {
 	destroy_tun_device
 }
 
+do_attempt_reconnect() {
+        set_vpngateway_route_attempt_reconnect
+}
+
 #### Main
 
 if [ -z "$reason" ]; then
@@ -1075,6 +1105,8 @@ case "$reason" in
 		# be left with a route to the VPN server through the VPN
 		# itself, which would need to be fixed.
 		run_hooks attempt-reconnect
+		do_attempt_reconnect
+		run_hooks post-attempt-reconnect
 		;;
 	reconnect)
 		# After successfully re-establishing the session.
