@@ -1,0 +1,21 @@
+variables:
+  BUILD_IMAGES_PROJECT: openconnect/build-images
+  CENTOS7_BUILD: openconnect-cli-centos7
+  JOBS: 2
+
+resolv.conf-iproute/Centos7:
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$CENTOS7_BUILD
+  before_script:
+  - yum install -y ocserv openconnect which
+  script:
+  - make -C tests check RESOLVCONF=1
+  tags:
+  - shared
+  - linux
+  except:
+  - tags
+  artifacts:
+    expire_in: 1 week
+    untracked: true
+    when: on_failure
+
