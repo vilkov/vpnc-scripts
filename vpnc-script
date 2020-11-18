@@ -101,6 +101,7 @@ if [ "$OS" = "Linux" ]; then
 	route_syntax_gw="gw"
 	route_syntax_del="del"
 	route_syntax_netmask="netmask"
+	ifconfig_syntax_del="del"
 else
 	# iproute2 is Linux only; if `which ip` returns something on another OS, it's likely an unrelated tool
 	# (see https://github.com/dlenski/openconnect/issues/132#issuecomment-470475009)
@@ -109,6 +110,7 @@ else
 	route_syntax_gw=""
 	route_syntax_del="delete"
 	route_syntax_netmask="-netmask"
+	ifconfig_syntax_del="delete"
 fi
 if [ "$OS" = "SunOS" ]; then
 	route_syntax_interface="-interface"
@@ -390,7 +392,7 @@ else # use route command
 		# route and use its gateway.
 		case "$VPNGATEWAY" in
 		*:*)	route add -inet6 -host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
-		*.*)	route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
+		*)	route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
 		esac
 	}
 
@@ -401,7 +403,7 @@ else # use route command
 	del_vpngateway_route() {
 		case "$VPNGATEWAY" in
 		*:*)	route $route_syntax_del -inet6 -host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
-		*.*)	route $route_syntax_del -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
+		*)	route $route_syntax_del -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
 		esac
 	}
 
@@ -501,7 +503,7 @@ else # use route command
 	}
 
 	reset_ipv6_default_route() {
-		route $route_syntax_del -inet6 ::/1 "$INTERNAL_IP6_ADDRESS" 
+		route $route_syntax_del -inet6 ::/1 "$INTERNAL_IP6_ADDRESS"
 		route $route_syntax_del -inet6 8000::/1 "$INTERNAL_IP6_ADDRESS"
 		:
 	}
@@ -1080,7 +1082,7 @@ do_disconnect() {
 			INTERNAL_IP6_NETMASK="$INTERNAL_IP6_ADDRESS/128"
 		fi
 		if [ -n "$INTERNAL_IP6_NETMASK" ]; then
-			ifconfig "$TUNDEV" inet6 delete $INTERNAL_IP6_NETMASK
+			ifconfig "$TUNDEV" inet6 $ifconfig_syntax_del $INTERNAL_IP6_NETMASK
 		fi
 	fi
 
