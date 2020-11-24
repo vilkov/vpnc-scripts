@@ -80,6 +80,7 @@ OS="`uname -s`"
 
 HOOKS_DIR=/etc/vpnc
 DEFAULT_ROUTE_FILE=/var/run/vpnc/defaultroute
+DEFAULT_ROUTE_FILE_IPV6=/var/run/vpnc/defaultroute_ipv6
 RESOLV_CONF_BACKUP=/var/run/vpnc/resolv.conf-backup
 SCRIPTNAME=`basename $0`
 
@@ -102,6 +103,7 @@ if [ "$OS" = "Linux" ]; then
 	route_syntax_del="del"
 	route_syntax_netmask="netmask"
 	ifconfig_syntax_del="del"
+	netstat_syntax_ipv6="-6"
 else
 	# iproute2 is Linux only; if `which ip` returns something on another OS, it's likely an unrelated tool
 	# (see https://github.com/dlenski/openconnect/issues/132#issuecomment-470475009)
@@ -111,6 +113,7 @@ else
 	route_syntax_del="delete"
 	route_syntax_netmask="-netmask"
 	ifconfig_syntax_del="delete"
+	netstat_syntax_ipv6="-f inet6"
 fi
 if [ "$OS" = "SunOS" ]; then
 	route_syntax_interface="-interface"
@@ -471,12 +474,15 @@ else # use route command
 	get_ipv6_default_gw() {
 		# isn't -n supposed to give --numeric output?
 		# apperently not...
-		netstat -r -n -f inet6 | awk '/^(default|::\/0)/ { print $2"%"$NF; }'
+		# FIXME: is there a better way to exclude loopback routes than filtering interface /^lo/?
+		netstat -r -n $netstat_syntax_ipv6 | awk '/^(default|::\/0)/ { if ($NF!~/^lo/) { print ($2~/^fe[89ab]/ ? $2"%"$NF : $2); } }'
 	}
 
 	set_ipv6_default_route() {
-		route add -inet6 ::/1 "$INTERNAL_IP6_ADDRESS" $route_syntax_interface
-		route add -inet6 8000::/1 "$INTERNAL_IP6_ADDRESS" $route_syntax_interface
+		DEFAULTGW="`get_ipv6_default_gw`"
+		echo "$DEFAULTGW" > "$DEFAULT_ROUTE_FILE_IPV6"
+		route $route_syntax_del -inet6 default $route_syntax_gw "$DEFAULTGW"
+		route add -inet6 default $route_syntax_gw "$INTERNAL_IP6_ADDRESS" $route_syntax_interface
 	}
 
 	set_ipv6_network_route() {
@@ -503,8 +509,11 @@ else # use route command
 	}
 
 	reset_ipv6_default_route() {
-		route $route_syntax_del -inet6 ::/1 "$INTERNAL_IP6_ADDRESS"
-		route $route_syntax_del -inet6 8000::/1 "$INTERNAL_IP6_ADDRESS"
+		if [ -s "$DEFAULT_ROUTE_FILE_IPV6" ]; then
+			route $route_syntax_del -inet6 default $route_syntax_gw "`get_ipv6_default_gw`" $route_syntax_interface
+			route add -inet6 default $route_syntax_gw `cat "$DEFAULT_ROUTE_FILE_IPV6"`
+			rm -f -- "$DEFAULT_ROUTE_FILE_IPV6"
+		fi
 		:
 	}
 
