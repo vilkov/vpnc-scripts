@@ -69,8 +69,13 @@
 # 1) Maybe dnsmasq can do something like that
 # 2) Parse dns packets going out via tunnel and redirect them to original dns-server
 
-#env | sort
-#set -x
+# ======== For test logging (CI/CD will uncomment automatically) =========
+
+#TRACE# echo "------------------"
+#TRACE# echo "vpnc-script environment:"
+#TRACE# env | egrep '^(CISCO_|INTERNAL_IP|VPNGATEWAY|TUNDEV|reason)' | sort
+#TRACE# echo "------------------"
+#TRACE# set -x
 
 # =========== script (variable) setup ====================================
 

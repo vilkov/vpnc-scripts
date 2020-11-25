@@ -7,8 +7,12 @@ resolv.conf-iproute/Centos7:
   image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$CENTOS7_BUILD
   before_script:
   - yum install -y ocserv openconnect which
+    net-tools
   script:
+  # Test with iproute2
   - make -C tests check RESOLVCONF=1
+  # Test with route/ifconfig/netstat (approximation of *BSD/macOS)
+  - make -C tests check RESOLVCONF=1 NO_IPROUTE2=1 TRACE_VPNC_SCRIPT=1
   tags:
   - shared
   - linux
@@ -18,4 +22,3 @@ resolv.conf-iproute/Centos7:
     expire_in: 1 week
     untracked: true
     when: on_failure
-

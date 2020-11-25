@@ -30,7 +30,15 @@ TUNDEV=oc-$$-tun0
 
 eval "${GETPORT}"
 
-if test -z "${IP}";then
+if test "$TRACE_VPNC_SCRIPT" = 1;then
+	echo "Enabling detailed tracing in vpnc-script (env; set -x)."
+	sed -i.trace -e 's|^#TRACE#||' ${srcdir}/../vpnc-script || exit 1
+fi
+
+if test "$NO_IPROUTE2" = 1;then
+	echo "Disabling iproute2 support in vpnc-script."
+	sed -i.iproute2 -e 's|IPROUTE=....*|IPROUTE="" # disable|g' ${srcdir}/../vpnc-script || exit 1
+elif test -z "${IP}";then
 	echo "no IP tool is present"
 	exit 1
 fi
@@ -58,6 +66,12 @@ function finish {
     cp ${RESOLVCONFBAK} /etc/resolv.conf
   fi
   rm -f ${OUTFILE} ${ALLFILE} ${RESOLVCONFBAK} 2>&1
+  if test "${NO_IPROUTE2}" = 1;then
+    mv -f ${srcdir}/../vpnc-script.iproute2 ${srcdir}/../vpnc-script 2>&1
+  fi
+  if test "${TRACE_VPNC_SCRIPT}" = 1;then
+    mv -f ${srcdir}/../vpnc-script.trace ${srcdir}/../vpnc-script 2>&1
+  fi
 }
 trap finish EXIT
 
