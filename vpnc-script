@@ -79,7 +79,8 @@ PATH=/sbin:/usr/sbin:$PATH
 OS="`uname -s`"
 
 HOOKS_DIR=/etc/vpnc
-DEFAULT_ROUTE_FILE=/var/run/vpnc/defaultroute
+DEFAULT_ROUTE_FILE=/var/run/vpnc/defaultroute.${PPID}
+DEFAULT_ROUTE_FILE_IPV6=/var/run/vpnc/defaultroute_ipv6.${PPID}
 RESOLV_CONF_BACKUP=/var/run/vpnc/resolv.conf-backup
 SCRIPTNAME=`basename $0`
 
@@ -101,6 +102,8 @@ if [ "$OS" = "Linux" ]; then
 	route_syntax_gw="gw"
 	route_syntax_del="del"
 	route_syntax_netmask="netmask"
+	ifconfig_syntax_del="del"
+	netstat_syntax_ipv6="-6"
 else
 	# iproute2 is Linux only; if `which ip` returns something on another OS, it's likely an unrelated tool
 	# (see https://github.com/dlenski/openconnect/issues/132#issuecomment-470475009)
@@ -109,6 +112,8 @@ else
 	route_syntax_gw=""
 	route_syntax_del="delete"
 	route_syntax_netmask="-netmask"
+	ifconfig_syntax_del="delete"
+	netstat_syntax_ipv6="-f inet6"
 fi
 if [ "$OS" = "SunOS" ]; then
 	route_syntax_interface="-interface"
@@ -388,7 +393,10 @@ else # use route command
 		# Unlike with iproute2, there is no way to determine which current
 		# route(s) match the VPN gateway, so we simply find a default
 		# route and use its gateway.
-		route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`"
+		case "$VPNGATEWAY" in
+		*:*)	route add -inet6 -host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
+		*)	route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
+		esac
 	}
 
         set_vpngateway_route_attempt_reconnect() {
@@ -396,7 +404,10 @@ else # use route command
         }
 
 	del_vpngateway_route() {
-		route $route_syntax_del -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`"
+		case "$VPNGATEWAY" in
+		*:*)	route $route_syntax_del -inet6 -host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
+		*)	route $route_syntax_del -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
+		esac
 	}
 
 	set_default_route() {
@@ -460,8 +471,18 @@ else # use route command
 		route $route_syntax_del -net "$NETWORK" $route_syntax_netmask "$NETMASK" $route_syntax_gw "$NETGW"
 	}
 
+	get_ipv6_default_gw() {
+		# isn't -n supposed to give --numeric output?
+		# apperently not...
+		# FIXME: is there a better way to exclude loopback routes than filtering interface /^lo/?
+		netstat -r -n $netstat_syntax_ipv6 | awk '/^(default|::\/0)/ { if ($NF!~/^lo/) { print ($2~/^fe[89ab]/ ? $2"%"$NF : $2); } }'
+	}
+
 	set_ipv6_default_route() {
-		route add -inet6 default "$INTERNAL_IP6_ADDRESS" $route_syntax_interface
+		DEFAULTGW="`get_ipv6_default_gw`"
+		echo "$DEFAULTGW" > "$DEFAULT_ROUTE_FILE_IPV6"
+		route $route_syntax_del -inet6 default $route_syntax_gw "$DEFAULTGW"
+		route add -inet6 default $route_syntax_gw "$INTERNAL_IP6_ADDRESS" $route_syntax_interface
 	}
 
 	set_ipv6_network_route() {
@@ -483,12 +504,16 @@ else # use route command
 		# Add explicit route to keep traffic for this target separate
 		# from tunnel. FIXME: We use default gateway - this is our best
 		# guess in absence of "ip" command to query effective route.
-		route add -inet6 -net "$NETWORK/$NETMASK" "`get_default_gw`" $route_syntax_interface
+		route add -inet6 -net "$NETWORK/$NETMASK" "`get_ipv6_default_gw`" $route_syntax_interface
 		:
 	}
 
 	reset_ipv6_default_route() {
-		route $route_syntax_del -inet6 default "$INTERNAL_IP6_ADDRESS"
+		if [ -s "$DEFAULT_ROUTE_FILE_IPV6" ]; then
+			route $route_syntax_del -inet6 default $route_syntax_gw "`get_ipv6_default_gw`" $route_syntax_interface
+			route add -inet6 default $route_syntax_gw `cat "$DEFAULT_ROUTE_FILE_IPV6"`
+			rm -f -- "$DEFAULT_ROUTE_FILE_IPV6"
+		fi
 		:
 	}
 
@@ -1066,7 +1091,7 @@ do_disconnect() {
 			INTERNAL_IP6_NETMASK="$INTERNAL_IP6_ADDRESS/128"
 		fi
 		if [ -n "$INTERNAL_IP6_NETMASK" ]; then
-			ifconfig "$TUNDEV" inet6 del $INTERNAL_IP6_NETMASK
+			ifconfig "$TUNDEV" inet6 $ifconfig_syntax_del $INTERNAL_IP6_NETMASK
 		fi
 	fi
 
