@@ -1,0 +1,245 @@
+#!/bin/bash
+#
+# Copyright (C) 2018 Nikos Mavrogiannopoulos
+#
+# This file is part of ocserv.
+#
+# ocserv is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at
+# your option) any later version.
+#
+# ocserv is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+PIDFILE=ocserv-pid.$$.tmp
+CLIPIDFILE=oc-pid.$$.tmp
+PATH=${PATH}:/usr/sbin
+RESOLVCONFBAK=resolv.conf.$$.bak
+OUTFILE=noroute-tun.$$.tmp
+ALLFILE=noroute-all.$$.tmp
+TUNDEV=oc-$$-tun0
+
+. `dirname $0`/common.sh
+
+eval "${GETPORT}"
+
+if test -z "${IP}";then
+	echo "no IP tool is present"
+	exit 1
+fi
+
+if test "$(id -u)" != "0";then
+	echo "This test must be run as root"
+	exit 1
+fi
+
+if test "${RESOLVCONF}" = 1;then
+  cp /etc/resolv.conf ${RESOLVCONFBAK}
+fi
+
+echo "Testing $0... "
+
+function finish {
+  set +e
+  echo " * Cleaning up..."
+  test -e "${CLIPIDFILE}" && kill $(cat ${CLIPIDFILE}) >/dev/null 2>&1
+  test -e "${CLIPIDFILE}" && rm -f ${CLIPIDFILE} >/dev/null 2>&1
+  test -e "${PIDFILE}" && kill $(cat ${PIDFILE}) >/dev/null 2>&1
+  test -e "${PIDFILE}" && rm -f ${PIDFILE} >/dev/null 2>&1
+  test -e "${CONFIG}" && rm -f ${CONFIG} >/dev/null 2>&1
+  if test "${RESOLVCONF}" = 1;then
+    cp ${RESOLVCONFBAK} /etc/resolv.conf
+  fi
+  rm -f ${OUTFILE} ${ALLFILE} ${RESOLVCONFBAK} 2>&1
+}
+trap finish EXIT
+
+# server address; we test for default route + two excluded
+# IPv4 routes. We don't test for IPv6 exclude routes because
+# it doesn't seem to work.
+ADDRESS=10.200.2.1
+CLI_ADDRESS=10.200.1.1
+DNS=192.168.1.1
+VPNNET=192.168.1.0/24
+NOROUTE1=192.168.32.0/24
+NOROUTE2=10.157.107.128/26
+VPNADDR=192.168.1.1
+VPNNET6=fd91:6d87:7341:db6a::/112
+VPNADDR6=fd91:6d87:7341:db6a::1
+OCCTL_SOCKET=./occtl-vpn-$$.socket
+USERNAME=test
+
+. `dirname $0`/ns.sh
+
+LISTEN_NS=${NSNAME2}
+
+# Run server
+update_config vpn-noroute.config
+if test "$VERBOSE" = 1;then
+DEBUG="-d 3"
+fi
+
+echo " * Running server on ${ADDRESS}:${PORT}"
+
+# runs on NSNAME2 due to configuration
+${OCSERV} -p ${PIDFILE} -c ${CONFIG} ${DEBUG} -f &
+
+sleep 4
+
+# Run clients
+echo " * Getting cookie from ${ADDRESS}:${PORT}..."
+( echo "test" | ${CMDNS1} ${OPENCONNECT} ${ADDRESS}:${PORT} -u ${USERNAME} --servercert=d66b507ae074d03b02eafca40d35f87dd81049d3 --cookieonly )
+if test $? != 0;then
+	echo "Could not get cookie from server"
+	exit 1
+fi
+
+echo " * Connecting to ${ADDRESS}:${PORT}..."
+( echo "test" | ${CMDNS1} ${OPENCONNECT} ${ADDRESS}:${PORT} --interface ${TUNDEV} -u ${USERNAME} --servercert=d66b507ae074d03b02eafca40d35f87dd81049d3 -s ${srcdir}/../vpnc-script --pid-file=${CLIPIDFILE} --passwd-on-stdin -b )
+if test $? != 0;then
+	echo "Could not connect to server"
+	exit 1
+fi
+
+echo " * wait for ${TUNDEV}"
+
+TIMEOUT=10
+while ! ${CMDNS1} ${IP} addr list dev ${TUNDEV} &>/dev/null; do
+    TIMEOUT=$(($TIMEOUT - 1))
+    if [ $TIMEOUT -eq 0 ]; then
+	echo "Timed out waiting for ${TUNDEV}"
+	exit 1
+    fi
+    sleep 1
+done
+sleep 3 # XX: CI needs additional delay here
+
+set -e
+echo " * ping remote address"
+
+${CMDNS1} ping -c 2 ${VPNADDR}
+
+#${CMDNS1} ping -6 -c 2 ${VPNADDR6}
+
+set +e
+
+echo " * showing connected user info"
+${CMDNS2} ${OCCTL} -s ${OCCTL_SOCKET} show user ${USERNAME}
+if test $? != 0;then
+	echo "occtl didn't find connected user!"
+	exit 1
+fi
+
+echo "* listing routes on ${TUNDEV}"
+${CMDNS1} ${IP} route list dev ${TUNDEV} > ${OUTFILE}
+${CMDNS1} ${IP} -6 route list dev ${TUNDEV} >> ${OUTFILE}
+
+${CMDNS1} ${IP} route list > ${ALLFILE}
+${CMDNS1} ${IP} -6 route list >> ${ALLFILE}
+
+echo " * Checking whether server routes are present in client"
+
+grep -e "${VPNNET}" ${OUTFILE} >/dev/null
+if test $? != 0;then
+	cat ${OUTFILE}
+	echo "Did not find VPN route ${VPNNET}"
+	exit 1
+fi
+
+grep -e "default" ${OUTFILE} >/dev/null
+if test $? != 0;then
+	cat ${OUTFILE}
+	echo "Did not find default route in VPN device"
+	exit 1
+fi
+
+grep -e "${NOROUTE1}" ${OUTFILE} >/dev/null
+if test $? = 0;then
+	cat ${OUTFILE}
+	echo "Found exclude route in VPN device: ${NOROUTE1}"
+	exit 1
+fi
+
+grep -e "${NOROUTE1}" ${ALLFILE} >/dev/null
+if test $? != 0;then
+	cat ${ALLFILE}
+	echo "Did not find exclude route: ${NOROUTE1}"
+	exit 1
+fi
+
+grep -e "${NOROUTE2}" ${ALLFILE} >/dev/null
+if test $? != 0;then
+	cat ${ALLFILE}
+	echo "Did not find exclude route: ${NOROUTE2}"
+	exit 1
+fi
+
+if test "${RESOLVCONF}" = 1;then
+	echo " * checking resolv.conf"
+	grep ${DNS} /etc/resolv.conf >/dev/null
+	if test $? != 0;then
+		cat /etc/resolv.conf
+		echo "Resolv.conf doesn't contain the VPN DNS server"
+		exit 1
+	fi
+fi
+
+# Kill the client and check whether resolvconf is as expected
+test -e "${CLIPIDFILE}" && kill $(cat ${CLIPIDFILE}) >/dev/null 2>&1
+test -e "${CLIPIDFILE}" && rm -f ${CLIPIDFILE} >/dev/null 2>&1
+
+
+sleep 4
+if test "${RESOLVCONF}" = 1;then
+	cmp ${RESOLVCONFBAK} /etc/resolv.conf
+	if test $? != 0;then
+		echo "Resolv.conf was not restored"
+		cat /etc/resolv.conf
+		exit 1
+	fi
+fi
+
+echo " * Checking whether routes are removed"
+
+${CMDNS1} ${IP} route list dev ${TUNDEV} > ${OUTFILE}
+${CMDNS1} ${IP} -6 route list dev ${TUNDEV} >> ${OUTFILE}
+
+${CMDNS1} ${IP} route list > ${ALLFILE}
+${CMDNS1} ${IP} -6 route list >> ${ALLFILE}
+
+grep -e "${VPNNET}" ${OUTFILE} >/dev/null
+if test $? = 0;then
+	cat ${OUTFILE}
+	echo "Found VPN route ${VPNNET} after disconnect"
+	exit 1
+fi
+
+grep -e "default" ${OUTFILE} >/dev/null
+if test $? = 0;then
+	cat ${OUTFILE}
+	echo "Found VPN default route after disconnect"
+	exit 1
+fi
+
+grep -e "${NOROUTE1}" ${ALLFILE} >/dev/null
+if test $? = 0;then
+	cat ${ALLFILE}
+	echo "Found exclude route: ${NOROUTE1} after disconnect"
+	exit 1
+fi
+
+grep -e "${NOROUTE2}" ${ALLFILE} >/dev/null
+if test $? = 0;then
+	cat ${ALLFILE}
+	echo "Found exclude route: ${NOROUTE2} after disconnect"
+	exit 1
+fi
+
+exit 0
