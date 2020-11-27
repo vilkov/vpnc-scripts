@@ -6,8 +6,7 @@ variables:
 resolv.conf-iproute/Centos7:
   image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$CENTOS7_BUILD
   before_script:
-  - yum install -y ocserv openconnect which
-    net-tools
+  - yum install -y openconnect net-tools
   script:
   # Test with iproute2
   - make -C tests check RESOLVCONF=1
