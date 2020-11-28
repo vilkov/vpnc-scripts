@@ -107,6 +107,10 @@ if [ "$OS" = "Linux" ]; then
 	route_syntax_gw="gw"
 	route_syntax_del="del"
 	route_syntax_netmask="netmask"
+	route_syntax_inet6="-6"
+	route_syntax_inet6_host="-6"
+	route_syntax_inet6_net="-6"
+	ifconfig_syntax_add_inet6="add"
 	ifconfig_syntax_del="del"
 	netstat_syntax_ipv6="-6"
 else
@@ -117,7 +121,11 @@ else
 	route_syntax_gw=""
 	route_syntax_del="delete"
 	route_syntax_netmask="-netmask"
+	route_syntax_inet6="-inet6"
+	route_syntax_inet6_host="-inet6 -host"
+	route_syntax_inet6_net="-inet6 -net"
 	ifconfig_syntax_del="delete"
+	ifconfig_syntax_add_inet6="inet6"
 	netstat_syntax_ipv6="-f inet6"
 fi
 if [ "$OS" = "SunOS" ]; then
@@ -227,7 +235,7 @@ do_ifconfig() {
 		# OpenVPN does the same (gives dest_address for Legacy IP
 		# but not for IPv6).
 		# Only Solaris needs it; hence $ifconfig_syntax_ptpv6
-		ifconfig "$TUNDEV" inet6 $INTERNAL_IP6_NETMASK $ifconfig_syntax_ptpv6 mtu $MTU up
+		ifconfig "$TUNDEV" $ifconfig_syntax_add_inet6 $INTERNAL_IP6_NETMASK $ifconfig_syntax_ptpv6 mtu $MTU up
 	    fi
 	fi
 }
@@ -400,7 +408,7 @@ else # use route command
 		# route(s) match the VPN gateway, so we simply find a default
 		# route and use its gateway.
 		case "$VPNGATEWAY" in
-		*:*)	route add -inet6 -host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
+		*:*)	route add $route_syntax_inet6_host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
 		*)	route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
 		esac
 	}
@@ -411,7 +419,7 @@ else # use route command
 
 	del_vpngateway_route() {
 		case "$VPNGATEWAY" in
-		*:*)	route $route_syntax_del -inet6 -host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
+		*:*)	route $route_syntax_del $route_syntax_inet6_host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw`";;
 		*)	route $route_syntax_del -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw`";;
 		esac
 	}
@@ -487,20 +495,24 @@ else # use route command
 	set_ipv6_default_route() {
 		DEFAULTGW="`get_ipv6_default_gw`"
 		echo "$DEFAULTGW" > "$DEFAULT_ROUTE_FILE_IPV6"
-		route $route_syntax_del -inet6 default $route_syntax_gw "$DEFAULTGW"
-		route add -inet6 default $route_syntax_gw "$INTERNAL_IP6_ADDRESS" $route_syntax_interface
+		route $route_syntax_del $route_syntax_inet6 default $route_syntax_gw "$DEFAULTGW"
+		route add $route_syntax_inet6 default $route_syntax_gw "$INTERNAL_IP6_ADDRESS" $route_syntax_interface
 	}
 
 	set_ipv6_network_route() {
 		NETWORK="$1"
 		NETMASK="$2"
+		DEVICE="$3"
 		if [ -n "$4" ]; then
 			NETGW="$4"
+		elif [ "$OS" = "Linux" ]; then
+			route add $route_syntax_inet6_net "$NETWORK/$NETMASK" dev "$DEVICE"
+			return
 		else
 			NETGW="$INTERNAL_IP6_ADDRESS"
 		fi
 
-		route add -inet6 -net "$NETWORK/$NETMASK" "$NETGW" $route_syntax_interface
+		route add $route_syntax_inet6_net "$NETWORK/$NETMASK" $route_syntax_gw "$NETGW" $route_syntax_interface
 		:
 	}
 
@@ -510,14 +522,14 @@ else # use route command
 		# Add explicit route to keep traffic for this target separate
 		# from tunnel. FIXME: We use default gateway - this is our best
 		# guess in absence of "ip" command to query effective route.
-		route add -inet6 -net "$NETWORK/$NETMASK" "`get_ipv6_default_gw`" $route_syntax_interface
+		route add $route_syntax_inet6_net "$NETWORK/$NETMASK" "`get_ipv6_default_gw`" $route_syntax_interface
 		:
 	}
 
 	reset_ipv6_default_route() {
 		if [ -s "$DEFAULT_ROUTE_FILE_IPV6" ]; then
-			route $route_syntax_del -inet6 default $route_syntax_gw "`get_ipv6_default_gw`" $route_syntax_interface
-			route add -inet6 default $route_syntax_gw `cat "$DEFAULT_ROUTE_FILE_IPV6"`
+			route $route_syntax_del $route_syntax_inet6 default $route_syntax_gw "`get_ipv6_default_gw`" $route_syntax_interface
+			route add $route_syntax_inet6 default $route_syntax_gw `cat "$DEFAULT_ROUTE_FILE_IPV6"`
 			rm -f -- "$DEFAULT_ROUTE_FILE_IPV6"
 		fi
 		:
@@ -526,19 +538,23 @@ else # use route command
 	del_ipv6_network_route() {
 		NETWORK="$1"
 		NETMASK="$2"
+		DEVICE="$3"
 		if [ -n "$4" ]; then
 			NETGW="$4"
+		elif [ "$OS" = "Linux" ]; then
+			route $route_syntax_del $route_syntax_inet6 "$NETWORK/$NETMASK" dev "$DEVICE"
+			return
 		else
 			NETGW="$INTERNAL_IP6_ADDRESS"
 		fi
-		route $route_syntax_del -inet6 "$NETWORK/$NETMASK" "$NETGW"
+		route $route_syntax_del $route_syntax_inet6 "$NETWORK/$NETMASK" $route_syntax_gw "$NETGW"
 		:
 	}
 
 	del_ipv6_exclude_route() {
 		NETWORK="$1"
 		NETMASK="$2"
-		route $route_syntax_del -inet6 "$NETWORK/$NETMASK"
+		route $route_syntax_del $route_syntax_inet6 "$NETWORK/$NETMASK"
 		:
 	}
 
