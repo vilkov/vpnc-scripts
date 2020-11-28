@@ -185,6 +185,9 @@ if test "${RESOLVCONF}" = 1;then
 	fi
 fi
 
+echo " * Found all expected routes"
+echo " * Terminating client"
+
 # Kill the client and check whether resolvconf is as expected
 test -e "${CLIPIDFILE}" && kill $(cat ${CLIPIDFILE}) >/dev/null 2>&1
 test -e "${CLIPIDFILE}" && rm -f ${CLIPIDFILE} >/dev/null 2>&1
