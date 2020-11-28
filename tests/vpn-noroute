@@ -116,6 +116,7 @@ if test $? != 0;then
 fi
 
 echo " * Connecting to ${ADDRESS}:${PORT}..."
+export INTERNAL_IP6_NETMASK="fd91:6d87:7341:db6a::1/112" INTERNAL_IP6_ADDRESS="fd91:6d87:7341:db6a::1" # FIXME see #12 and !16#note_454710802
 ( echo "test" | ${CMDNS1} ${OPENCONNECT} ${ADDRESS}:${PORT} --interface ${TUNDEV} -u ${USERNAME} --servercert=d66b507ae074d03b02eafca40d35f87dd81049d3 -s ${srcdir}/../vpnc-script --pid-file=${CLIPIDFILE} --passwd-on-stdin -b )
 if test $? != 0;then
 	echo "Could not connect to server"
