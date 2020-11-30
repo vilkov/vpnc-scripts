@@ -30,7 +30,15 @@ TUNDEV=oc-$$-tun0
 
 eval "${GETPORT}"
 
-if test -z "${IP}";then
+if test "$TRACE_VPNC_SCRIPT" = 1;then
+	echo "Enabling detailed tracing in vpnc-script (env; set -x)."
+	sed -i.trace -e 's|^#TRACE#||' ${srcdir}/../vpnc-script || exit 1
+fi
+
+if test "$NO_IPROUTE2" = 1;then
+	echo "Disabling iproute2 support in vpnc-script."
+	sed -i.iproute2 -e 's|IPROUTE=....*|IPROUTE="" # disable|g' ${srcdir}/../vpnc-script || exit 1
+elif test -z "${IP}";then
 	echo "no IP tool is present"
 	exit 1
 fi
@@ -58,6 +66,12 @@ function finish {
     cp ${RESOLVCONFBAK} /etc/resolv.conf
   fi
   rm -f ${OUTFILE} ${ALLFILE} ${RESOLVCONFBAK} 2>&1
+  if test "${NO_IPROUTE2}" = 1;then
+    mv -f ${srcdir}/../vpnc-script.iproute2 ${srcdir}/../vpnc-script 2>&1
+  fi
+  if test "${TRACE_VPNC_SCRIPT}" = 1;then
+    mv -f ${srcdir}/../vpnc-script.trace ${srcdir}/../vpnc-script 2>&1
+  fi
 }
 trap finish EXIT
 
@@ -102,6 +116,7 @@ if test $? != 0;then
 fi
 
 echo " * Connecting to ${ADDRESS}:${PORT}..."
+export INTERNAL_IP6_NETMASK="fd91:6d87:7341:db6a::1/112" INTERNAL_IP6_ADDRESS="fd91:6d87:7341:db6a::1" # FIXME see #12 and !16#note_454710802
 ( echo "test" | ${CMDNS1} ${OPENCONNECT} ${ADDRESS}:${PORT} --interface ${TUNDEV} -u ${USERNAME} --servercert=d66b507ae074d03b02eafca40d35f87dd81049d3 -s ${srcdir}/../vpnc-script --pid-file=${CLIPIDFILE} --passwd-on-stdin -b )
 if test $? != 0;then
 	echo "Could not connect to server"
@@ -190,6 +205,9 @@ if test "${RESOLVCONF}" = 1;then
 		exit 1
 	fi
 fi
+
+echo " * Found all expected routes"
+echo " * Terminating client"
 
 # Kill the client and check whether resolvconf is as expected
 test -e "${CLIPIDFILE}" && kill $(cat ${CLIPIDFILE}) >/dev/null 2>&1
