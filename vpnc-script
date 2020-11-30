@@ -143,8 +143,9 @@ elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
 	# For systemd-resolved (version 229 and above)
 	MODIFYRESOLVCONF=modify_resolved_manager_old
 	RESTORERESOLVCONF=restore_resolved_manager_old
-elif [ -x /sbin/resolvconf -a "$(basename $(readlink /sbin/resolvconf))" != 'resolvectl' ]; then
+elif [ -x /sbin/resolvconf ] && [ `basename $(readlink /sbin/resolvconf)` != resolvectl ]; then
 	# Optional tool on Debian, Ubuntu, Gentoo and FreeBSD
+	# (ignored if symlink to resolvctl, created by some versions of systemd-resolved)
 	MODIFYRESOLVCONF=modify_resolvconf_manager
 	RESTORERESOLVCONF=restore_resolvconf_manager
 elif [ -x /sbin/netconfig ] && [ ! -f /etc/slackware-version ]; then
