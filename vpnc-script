@@ -24,6 +24,7 @@
 #* reason                       -- why this script was called, one of: pre-init connect disconnect reconnect attempt-reconnect
 #* VPNGATEWAY                   -- VPN gateway address (always present)
 #* TUNDEV                       -- tunnel device (always present)
+#* IDLE_TIMEOUT			-- gateway's idle timeout in seconds (OpenConnect v8.06+); unused
 #* INTERNAL_IP4_ADDRESS         -- address (always present)
 #* INTERNAL_IP4_MTU             -- MTU (often unset)
 #* INTERNAL_IP4_NETMASK         -- netmask (often unset)
@@ -76,7 +77,7 @@
 
 #TRACE# echo "------------------"
 #TRACE# echo "vpnc-script environment:"
-#TRACE# env | egrep '^(CISCO_|INTERNAL_IP|VPNGATEWAY|TUNDEV|reason)' | sort
+#TRACE# env | egrep '^(CISCO_|INTERNAL_IP|VPNGATEWAY|TUNDEV|IDLE_TIMEOUT|reason)' | sort
 #TRACE# echo "------------------"
 #TRACE# set -x
 
