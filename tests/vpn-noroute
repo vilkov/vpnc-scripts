@@ -102,8 +102,8 @@ fi
 
 echo " * Running server on ${ADDRESS}:${PORT}"
 
-# runs on NSNAME2 due to configuration
-${OCSERV} -p ${PIDFILE} -c ${CONFIG} ${DEBUG} -f &
+# run on NSNAME2
+${CMDNS2} ${OCSERV} -p ${PIDFILE} -c ${CONFIG} ${DEBUG} -f &
 
 sleep 4
 
