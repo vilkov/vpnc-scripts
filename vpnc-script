@@ -111,7 +111,7 @@ if [ "$OS" = "Linux" ]; then
 	route_syntax_inet6_host="-6"
 	route_syntax_inet6_net="-6"
 	ifconfig_syntax_add_inet6="add"
-	ifconfig_syntax_del="del"
+	ifconfig_syntax_del() { case "$1" in *:*) echo del "$1" ;; *) echo 0.0.0.0 ;; esac; }
 	netstat_syntax_ipv6="-6"
 else
 	# iproute2 is Linux only; if `which ip` returns something on another OS, it's likely an unrelated tool
@@ -124,7 +124,7 @@ else
 	route_syntax_inet6="-inet6"
 	route_syntax_inet6_host="-inet6 -host"
 	route_syntax_inet6_net="-inet6 -net"
-	ifconfig_syntax_del="delete"
+	ifconfig_syntax_del() { case "$1" in *:*) echo inet6 "$1" delete ;; *) echo "$1" delete ;; esac; }
 	ifconfig_syntax_add_inet6="inet6"
 	netstat_syntax_ipv6="-f inet6"
 fi
@@ -1107,13 +1107,13 @@ do_disconnect() {
 		fi
 	else
 		if [ -n "$INTERNAL_IP4_ADDRESS" ]; then
-			ifconfig "$TUNDEV" 0.0.0.0
+			ifconfig "$TUNDEV" `ifconfig_syntax_del "$INTERNAL_IP4_ADDRESS"`
 		fi
 		if [ -n "$INTERNAL_IP6_ADDRESS" ] && [ -z "$INTERNAL_IP6_NETMASK" ]; then
 			INTERNAL_IP6_NETMASK="$INTERNAL_IP6_ADDRESS/128"
 		fi
 		if [ -n "$INTERNAL_IP6_NETMASK" ]; then
-			ifconfig "$TUNDEV" inet6 $ifconfig_syntax_del $INTERNAL_IP6_NETMASK
+			ifconfig "$TUNDEV" `ifconfig_syntax_del "$INTERNAL_IP6_NETMASK"`
 		fi
 	fi
 
