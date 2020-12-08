@@ -917,28 +917,12 @@ restore_resolvconf_unbound() {
 
 # ========= Toplevel state handling  =======================================
 
-kernel_is_2_6_or_above() {
-	case `uname -r` in
-		1.*|2.[012345]*)
-			return 1
-			;;
-		*)
-			return 0
-			;;
-	esac
-}
-
 do_pre_init() {
 	if [ "$OS" = "Linux" ]; then
 		if (exec 6< /dev/net/tun) > /dev/null 2>&1 ; then
 			:
 		else # can't open /dev/net/tun
 			test -e /proc/sys/kernel/modprobe && `cat /proc/sys/kernel/modprobe` tun 2>/dev/null
-			# fix for broken devfs in kernel 2.6.x
-			if [ "`readlink /dev/net/tun`" = misc/net/tun \
-				-a ! -e /dev/net/misc/net/tun -a -e /dev/misc/net/tun ] ; then
-				ln -sf /dev/misc/net/tun /dev/net/tun
-			fi
 			# make sure tun device exists
 			if [ ! -e /dev/net/tun ]; then
 				mkdir -p /dev/net
@@ -946,12 +930,10 @@ do_pre_init() {
 				[ -x /sbin/restorecon ] && /sbin/restorecon /dev/net/tun
 			fi
 			# workaround for a possible latency caused by udev, sleep max. 10s
-			if kernel_is_2_6_or_above ; then
-				for x in `seq 100` ; do
-					(exec 6<> /dev/net/tun) > /dev/null 2>&1 && break;
-					sleep 0.1
-				done
-			fi
+			for x in $(seq 100) ; do
+				(exec 6<> /dev/net/tun) > /dev/null 2>&1 && break;
+				sleep 0.1
+			done
 		fi
 	elif [ "$OS" = "FreeBSD" -o "$OS" = "DragonFly" ]; then
 		if ! ifconfig $TUNDEV > /dev/null; then
