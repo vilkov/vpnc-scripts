@@ -244,17 +244,6 @@ do_ifconfig() {
 	fi
 }
 
-destroy_tun_device() {
-	case "$OS" in
-	NetBSD|OpenBSD) # and probably others...
-		ifconfig "$TUNDEV" destroy
-		;;
-	FreeBSD|DragonFly)
-		ifconfig "$TUNDEV" destroy > /dev/null 2>&1 &
-		;;
-	esac
-}
-
 # =========== route handling ====================================
 
 if [ -n "$IPROUTE" ]; then
@@ -1134,7 +1123,14 @@ do_disconnect() {
 		ifconfig "$TUNDEV" down
 	fi
 
-	destroy_tun_device
+	case "$OS" in
+	NetBSD|OpenBSD) # and probably others...
+		ifconfig "$TUNDEV" destroy
+		;;
+	FreeBSD|DragonFly)
+		ifconfig "$TUNDEV" destroy > /dev/null 2>&1 &
+		;;
+	esac
 }
 
 do_attempt_reconnect() {
