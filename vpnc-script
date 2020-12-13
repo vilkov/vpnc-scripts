@@ -1101,6 +1101,7 @@ do_disconnect() {
 		if [ -n "$INTERNAL_IP6_NETMASK" ]; then
 			$IPROUTE -6 addr del $INTERNAL_IP6_NETMASK dev $TUNDEV
 		fi
+		$IPROUTE link set dev "$TUNDEV" down
 	else
 		if [ -n "$INTERNAL_IP4_ADDRESS" ]; then
 			ifconfig "$TUNDEV" `ifconfig_syntax_del "$INTERNAL_IP4_ADDRESS"`
@@ -1111,6 +1112,7 @@ do_disconnect() {
 		if [ -n "$INTERNAL_IP6_NETMASK" ]; then
 			ifconfig "$TUNDEV" `ifconfig_syntax_del "$INTERNAL_IP6_NETMASK"`
 		fi
+		ifconfig "$TUNDEV" down
 	fi
 
 	destroy_tun_device
