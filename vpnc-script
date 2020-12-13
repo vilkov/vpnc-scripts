@@ -157,7 +157,7 @@ elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
 	MODIFYRESOLVCONF=modify_resolved_manager_old
 	RESTORERESOLVCONF=restore_resolved_manager_old
 elif [ -x /sbin/resolvconf ] && [ "`basename $(readlink /sbin/resolvconf) 2> /dev/null`" != resolvectl ]; then
-	# Optional tool on Debian, Ubuntu, Gentoo and FreeBSD
+	# Optional tool on Debian, Ubuntu, Gentoo, FreeBSD and DragonFly BSD
 	# (ignored if symlink to resolvctl, created by some versions of systemd-resolved)
 	MODIFYRESOLVCONF=modify_resolvconf_manager
 	RESTORERESOLVCONF=restore_resolvconf_manager
@@ -245,7 +245,7 @@ destroy_tun_device() {
 	NetBSD|OpenBSD) # and probably others...
 		ifconfig "$TUNDEV" destroy
 		;;
-	FreeBSD)
+	FreeBSD|DragonFly)
 		ifconfig "$TUNDEV" destroy > /dev/null 2>&1 &
 		;;
 	esac
@@ -919,11 +919,7 @@ do_pre_init() {
 				done
 			fi
 		fi
-	elif [ "$OS" = "FreeBSD" ]; then
-		if ! kldstat -q -m if_tun > /dev/null; then
-			kldload if_tun
-		fi
-
+	elif [ "$OS" = "FreeBSD" -o "$OS" = "DragonFly" ]; then
 		if ! ifconfig $TUNDEV > /dev/null; then
 			ifconfig $TUNDEV create
 		fi
