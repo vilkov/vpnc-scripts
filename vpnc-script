@@ -400,7 +400,7 @@ else # use route command
 		# Get rid of lines containing IPv6 addresses (':')
 		# Get rid of lines for link-local routes (https://superuser.com/a/1067742)
 		# Get rid of lines containing $TUNDEV (we don't want loopback)
-		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /\s'"$TUNDEV"'(\s|$)/ { next; } /^(default|0\.0\.0\.0)/ { print $2; exit; }'
+		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /\s'"$TUNDEV"'(\s|$)/ { next; } /^(default|0\.0\.0\.0(\s|\/0))/ { print $2; exit; }'
 	}
 
 	set_vpngateway_route() {
