@@ -399,6 +399,10 @@ else # use route command
 		# apperently not...
 		# Get rid of lines containing IPv6 addresses (':')
 		# Get rid of lines for link-local routes (https://superuser.com/a/1067742)
+		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
+	}
+
+	get_default_gw_excl_tunnel() {
 		# Get rid of lines containing $TUNDEV (we don't want loopback)
 		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /[[:space:]]'"$TUNDEV"'([[:space:]]|$)/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
 	}
@@ -414,7 +418,10 @@ else # use route command
 	}
 
         set_vpngateway_route_attempt_reconnect() {
-		set_vpngateway_route
+		case "$VPNGATEWAY" in
+		*:*)	route add $route_syntax_inet6_host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw_excl_tunnel`";;
+		*)	route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw_excl_tunnel`";;
+		esac
         }
 
 	del_vpngateway_route() {
@@ -490,6 +497,10 @@ else # use route command
 		# apperently not...
 		# FIXME: is there a better way to exclude loopback routes than filtering interface /^lo/?
 		netstat -r -n $netstat_syntax_ipv6 | awk '/^(default|::\/0)/ { if ($NF!~/^lo/) { print ($2~/^fe[89ab]/ ? $2"%"$NF : $2); } }'
+	}
+
+	get_ipv6_default_gw_excl_tunnel() {
+		netstat -r -n $netstat_syntax_ipv6 | awk '/^(default|::\/0)/ { if ($NF!~/^lo/ && /$NF!~/'"$TUNDEV"'([[:space:]]|$)/) { print ($2~/^fe[89ab]/ ? $2"%"$NF : $2); } }'
 	}
 
 	set_ipv6_default_route() {
