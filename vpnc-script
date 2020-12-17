@@ -157,7 +157,7 @@ elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
 	MODIFYRESOLVCONF=modify_resolved_manager_old
 	RESTORERESOLVCONF=restore_resolved_manager_old
 elif [ -x /sbin/resolvconf ] && [ "`basename $(readlink /sbin/resolvconf) 2> /dev/null`" != resolvectl ]; then
-	# Optional tool on Debian, Ubuntu, Gentoo and FreeBSD
+	# Optional tool on Debian, Ubuntu, Gentoo, FreeBSD and DragonFly BSD
 	# (ignored if symlink to resolvctl, created by some versions of systemd-resolved)
 	MODIFYRESOLVCONF=modify_resolvconf_manager
 	RESTORERESOLVCONF=restore_resolvconf_manager
@@ -245,7 +245,7 @@ destroy_tun_device() {
 	NetBSD|OpenBSD) # and probably others...
 		ifconfig "$TUNDEV" destroy
 		;;
-	FreeBSD)
+	FreeBSD|DragonFly)
 		ifconfig "$TUNDEV" destroy > /dev/null 2>&1 &
 		;;
 	esac
@@ -399,8 +399,12 @@ else # use route command
 		# apperently not...
 		# Get rid of lines containing IPv6 addresses (':')
 		# Get rid of lines for link-local routes (https://superuser.com/a/1067742)
+		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
+	}
+
+	get_default_gw_excl_tunnel() {
 		# Get rid of lines containing $TUNDEV (we don't want loopback)
-		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /\s'"$TUNDEV"'(\s|$)/ { next; } /^(default|0\.0\.0\.0)/ { print $2; exit; }'
+		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /[[:space:]]'"$TUNDEV"'([[:space:]]|$)/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
 	}
 
 	set_vpngateway_route() {
@@ -414,7 +418,10 @@ else # use route command
 	}
 
         set_vpngateway_route_attempt_reconnect() {
-		set_vpngateway_route
+		case "$VPNGATEWAY" in
+		*:*)	route add $route_syntax_inet6_host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw_excl_tunnel`";;
+		*)	route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw_excl_tunnel`";;
+		esac
         }
 
 	del_vpngateway_route() {
@@ -490,6 +497,10 @@ else # use route command
 		# apperently not...
 		# FIXME: is there a better way to exclude loopback routes than filtering interface /^lo/?
 		netstat -r -n $netstat_syntax_ipv6 | awk '/^(default|::\/0)/ { if ($NF!~/^lo/) { print ($2~/^fe[89ab]/ ? $2"%"$NF : $2); } }'
+	}
+
+	get_ipv6_default_gw_excl_tunnel() {
+		netstat -r -n $netstat_syntax_ipv6 | awk '/^(default|::\/0)/ { if ($NF!~/^lo/ && /$NF!~/'"$TUNDEV"'([[:space:]]|$)/) { print ($2~/^fe[89ab]/ ? $2"%"$NF : $2); } }'
 	}
 
 	set_ipv6_default_route() {
@@ -919,11 +930,7 @@ do_pre_init() {
 				done
 			fi
 		fi
-	elif [ "$OS" = "FreeBSD" ]; then
-		if ! kldstat -q -m if_tun > /dev/null; then
-			kldload if_tun
-		fi
-
+	elif [ "$OS" = "FreeBSD" -o "$OS" = "DragonFly" ]; then
 		if ! ifconfig $TUNDEV > /dev/null; then
 			ifconfig $TUNDEV create
 		fi
@@ -1054,7 +1061,10 @@ do_disconnect() {
 			eval NETWORK="\${CISCO_SPLIT_EXC_${i}_ADDR}"
 			eval NETMASK="\${CISCO_SPLIT_EXC_${i}_MASK}"
 			eval NETMASKLEN="\${CISCO_SPLIT_EXC_${i}_MASKLEN}"
-			del_exclude_route "$NETWORK" "$NETMASK" "$NETMASKLEN"
+			case "$NETWORK" in
+				0.*|127.*|169.254.*) ;; # ignoring non-forwardable exclude route
+				*) del_exclude_route "$NETWORK" "$NETMASK" "$NETMASKLEN" ;;
+			esac
 			i=`expr $i + 1`
 		done
 	fi
@@ -1105,6 +1115,7 @@ do_disconnect() {
 		if [ -n "$INTERNAL_IP6_NETMASK" ]; then
 			$IPROUTE -6 addr del $INTERNAL_IP6_NETMASK dev $TUNDEV
 		fi
+		$IPROUTE link set dev "$TUNDEV" down
 	else
 		if [ -n "$INTERNAL_IP4_ADDRESS" ]; then
 			ifconfig "$TUNDEV" `ifconfig_syntax_del "$INTERNAL_IP4_ADDRESS"`
@@ -1115,6 +1126,7 @@ do_disconnect() {
 		if [ -n "$INTERNAL_IP6_NETMASK" ]; then
 			ifconfig "$TUNDEV" `ifconfig_syntax_del "$INTERNAL_IP6_NETMASK"`
 		fi
+		ifconfig "$TUNDEV" down
 	fi
 
 	destroy_tun_device
