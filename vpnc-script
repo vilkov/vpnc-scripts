@@ -316,7 +316,12 @@ if [ -n "$IPROUTE" ]; then
 		NETWORK="$1"
 		NETMASK="$2"
 		NETMASKLEN="$3"
-		$IPROUTE route add `$IPROUTE route get "$NETWORK" | fix_ip_get_output "/$NETMASKLEN"`
+		ARGS=`$IPROUTE route get "$NETWORK" 2>/dev/null | fix_ip_get_output "/$NETMASKLEN"`
+		if [ -z "$ARGS" ]; then
+			echo "ignoring non-forwardable exclude route $NETWORK/$NETMASKLEN" >&2
+			return
+		fi
+		$IPROUTE route add $ARGS
 		$IPROUTE route flush cache 2>/dev/null
 	}
 
@@ -371,7 +376,12 @@ if [ -n "$IPROUTE" ]; then
 		# (keep traffic separate from VPN tunnel)
 		NETWORK="$1"
 		NETMASKLEN="$2"
-		$IPROUTE -6 route add `$IPROUTE route get "$NETWORK" | fix_ip_get_output "/$NETMASKLEN"`
+		ARGS=`$IPROUTE route get "$NETWORK" 2>/dev/null | fix_ip_get_output "/$NETMASKLEN"`
+		if [ -z "$ARGS" ]; then
+			echo "ignoring non-forwardable exclude route $NETWORK/$NETMASKLEN" >&2
+			return
+		fi
+		$IPROUTE -6 route add $ARGS
 		$IPROUTE route flush cache 2>/dev/null
 	}
 
@@ -457,8 +467,10 @@ else # use route command
 		NETWORK="$1"
 		NETMASK="$2"
 		NETMASKLEN="$3"
+		DEFAULTGW="${DEFAULTGW:-`get_default_gw`}"
 		if [ -z "$DEFAULTGW" ]; then
-			DEFAULTGW="`get_default_gw`"
+			echo "ignoring non-forwardable exclude route $NETWORK/$NETMASKLEN" >&2
+			return
 		fi
 		# Add explicit route to keep traffic for this target separate
 		# from tunnel. FIXME: We use default gateway - this is our best
@@ -533,10 +545,15 @@ else # use route command
 	set_ipv6_exclude_route() {
 		NETWORK="$1"
 		NETMASK="$2"
+		IPV6DEFAULTGW="${IPV6DEFAULTGW:-`get_ipv6_default_gw`}"
+		if [ -z "$IPV6DEFAULTGW" ]; then
+			echo "ignoring non-forwardable exclude route $NETWORK/$NETMASKLEN" >&2
+			return
+		fi
 		# Add explicit route to keep traffic for this target separate
 		# from tunnel. FIXME: We use default gateway - this is our best
 		# guess in absence of "ip" command to query effective route.
-		route add $route_syntax_inet6_net "$NETWORK/$NETMASK" "`get_ipv6_default_gw`" $route_syntax_interface
+		route add $route_syntax_inet6_net "$NETWORK/$NETMASK" "$IPV6DEFAULTGW" $route_syntax_interface
 		:
 	}
 
