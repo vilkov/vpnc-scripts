@@ -47,6 +47,9 @@
 #* CISCO_IPV6_SPLIT_INC         -- number of networks in IPv6 split-network-list
 #* CISCO_IPV6_SPLIT_INC_%d_ADDR -- IPv6 network address
 #* CISCO_IPV6_SPLIT_INC_$%d_MASKLEN -- IPv6 subnet masklen
+#
+# The split tunnel variables above have *_EXC* counterparts for network
+# addresses to be excluded from the VPN tunnel.
 
 # FIXMEs:
 
