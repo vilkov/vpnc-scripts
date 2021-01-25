@@ -22,28 +22,29 @@
 #
 # List of parameters passed through environment
 #* reason                       -- why this script was called, one of: pre-init connect disconnect reconnect attempt-reconnect
-#* VPNGATEWAY                   -- vpn gateway address (always present)
+#* VPNGATEWAY                   -- VPN gateway address (always present)
 #* TUNDEV                       -- tunnel device (always present)
+#* IDLE_TIMEOUT			-- gateway's idle timeout in seconds (OpenConnect v8.06+); unused
 #* INTERNAL_IP4_ADDRESS         -- address (always present)
-#* INTERNAL_IP4_MTU             -- mtu (often unset)
+#* INTERNAL_IP4_MTU             -- MTU (often unset)
 #* INTERNAL_IP4_NETMASK         -- netmask (often unset)
 #* INTERNAL_IP4_NETMASKLEN      -- netmask length (often unset)
 #* INTERNAL_IP4_NETADDR         -- address of network (only present if netmask is set)
-#* INTERNAL_IP4_DNS             -- list of dns servers
-#* INTERNAL_IP4_NBNS            -- list of wins servers
+#* INTERNAL_IP4_DNS             -- list of DNS servers
+#* INTERNAL_IP4_NBNS            -- list of WINS servers
 #* INTERNAL_IP6_ADDRESS         -- IPv6 address
 #* INTERNAL_IP6_NETMASK         -- IPv6 netmask
 #* INTERNAL_IP6_DNS             -- IPv6 list of dns servers
 #* CISCO_DEF_DOMAIN             -- default domain name
 #* CISCO_BANNER                 -- banner from server
-#* CISCO_SPLIT_DNS              -- dns search domain list
+#* CISCO_SPLIT_DNS              -- DNS search domain list
 #* CISCO_SPLIT_INC              -- number of networks in split-network-list
 #* CISCO_SPLIT_INC_%d_ADDR      -- network address
 #* CISCO_SPLIT_INC_%d_MASK      -- subnet mask (for example: 255.255.255.0)
 #* CISCO_SPLIT_INC_%d_MASKLEN   -- subnet masklen (for example: 24)
-#* CISCO_SPLIT_INC_%d_PROTOCOL  -- protocol (often just 0)
-#* CISCO_SPLIT_INC_%d_SPORT     -- source port (often just 0)
-#* CISCO_SPLIT_INC_%d_DPORT     -- destination port (often just 0)
+#* CISCO_SPLIT_INC_%d_PROTOCOL  -- protocol (often just 0); unused
+#* CISCO_SPLIT_INC_%d_SPORT     -- source port (often just 0); unused
+#* CISCO_SPLIT_INC_%d_DPORT     -- destination port (often just 0); unused
 #* CISCO_IPV6_SPLIT_INC         -- number of networks in IPv6 split-network-list
 #* CISCO_IPV6_SPLIT_INC_%d_ADDR -- IPv6 network address
 #* CISCO_IPV6_SPLIT_INC_$%d_MASKLEN -- IPv6 subnet masklen
@@ -70,13 +71,13 @@
 # Section B: Split DNS handling
 
 # 1) Maybe dnsmasq can do something like that
-# 2) Parse dns packets going out via tunnel and redirect them to original dns-server
+# 2) Parse DNS packets going out via tunnel and redirect them to original DNS-server
 
 # ======== For test logging (CI/CD will uncomment automatically) =========
 
 #TRACE# echo "------------------"
 #TRACE# echo "vpnc-script environment:"
-#TRACE# env | egrep '^(CISCO_|INTERNAL_IP|VPNGATEWAY|TUNDEV|reason)' | sort
+#TRACE# env | egrep '^(CISCO_|INTERNAL_IP|VPNGATEWAY|TUNDEV|IDLE_TIMEOUT|reason)' | sort
 #TRACE# echo "------------------"
 #TRACE# set -x
 
@@ -189,9 +190,9 @@ run_hooks() {
 	HOOK="$1"
 
 	if [ -d ${HOOKS_DIR}/${HOOK}.d ]; then
-	    for script in ${HOOKS_DIR}/${HOOK}.d/* ; do
-		[ -f $script ] && . $script
-	    done
+		for script in ${HOOKS_DIR}/${HOOK}.d/* ; do
+			[ -f $script ] && . $script
+		done
 	fi
 }
 
@@ -226,32 +227,21 @@ do_ifconfig() {
 
 	# If the netmask is provided, it contains the address _and_ netmask
 	if [ -n "$INTERNAL_IP6_ADDRESS" ] && [ -z "$INTERNAL_IP6_NETMASK" ]; then
-	    INTERNAL_IP6_NETMASK="$INTERNAL_IP6_ADDRESS/128"
+		INTERNAL_IP6_NETMASK="$INTERNAL_IP6_ADDRESS/128"
 	fi
 	if [ -n "$INTERNAL_IP6_NETMASK" ]; then
-	    if [ -n "$IPROUTE" ]; then
-		$IPROUTE -6 addr add $INTERNAL_IP6_NETMASK dev $TUNDEV
-	    else
-		# Unlike for Legacy IP, we don't specify the dest_address
-		# here on *BSD. OpenBSD for one will refuse to accept
-		# incoming packets to that address if we do.
-		# OpenVPN does the same (gives dest_address for Legacy IP
-		# but not for IPv6).
-		# Only Solaris needs it; hence $ifconfig_syntax_ptpv6
-		ifconfig "$TUNDEV" $ifconfig_syntax_add_inet6 $INTERNAL_IP6_NETMASK $ifconfig_syntax_ptpv6 mtu $MTU up
-	    fi
+		if [ -n "$IPROUTE" ]; then
+			$IPROUTE -6 addr add $INTERNAL_IP6_NETMASK dev $TUNDEV
+		else
+			# Unlike for Legacy IP, we don't specify the dest_address
+			# here on *BSD. OpenBSD for one will refuse to accept
+			# incoming packets to that address if we do.
+			# OpenVPN does the same (gives dest_address for Legacy IP
+			# but not for IPv6).
+			# Only Solaris needs it; hence $ifconfig_syntax_ptpv6
+			ifconfig "$TUNDEV" $ifconfig_syntax_add_inet6 $INTERNAL_IP6_NETMASK $ifconfig_syntax_ptpv6 mtu $MTU up
+		fi
 	fi
-}
-
-destroy_tun_device() {
-	case "$OS" in
-	NetBSD|OpenBSD) # and probably others...
-		ifconfig "$TUNDEV" destroy
-		;;
-	FreeBSD|DragonFly)
-		ifconfig "$TUNDEV" destroy > /dev/null 2>&1 &
-		;;
-	esac
 }
 
 # =========== route handling ====================================
@@ -267,7 +257,7 @@ if [ -n "$IPROUTE" ]; then
 		$IPROUTE route flush cache 2>/dev/null
 	}
 
-        set_vpngateway_route_attempt_reconnect() {
+	set_vpngateway_route_attempt_reconnect() {
 		# We'll attempt to add a host route to the gateway through every route that matches
 		# its address (excluding those through TUNDEV because the goal is to avoid loopback).
 
@@ -283,7 +273,7 @@ if [ -n "$IPROUTE" ]; then
 			$IPROUTE $FAMILY route add `echo "$VPNGATEWAY $LINE" | fix_ip_get_output` 2>/dev/null
 		done
 		$IPROUTE $FAMILY route flush cache 2>/dev/null
-        }
+	}
 
 	del_vpngateway_route() {
 		$IPROUTE route $route_syntax_del "$VPNGATEWAY"
@@ -327,7 +317,7 @@ if [ -n "$IPROUTE" ]; then
 
 	del_exclude_route() {
 		# FIXME: In theory, this could delete existing routes which are
-		# identical to split-exclude routes specificed by VPNGATEWAY
+		# identical to split-exclude routes specified by VPNGATEWAY
 		NETWORK="$1"
 		NETMASK="$2"
 		NETMASKLEN="$3"
@@ -408,10 +398,10 @@ if [ -n "$IPROUTE" ]; then
 	}
 else # use route command
 	get_default_gw() {
-		# isn't -n supposed to give --numeric output?
-		# apperently not...
-		# Get rid of lines containing IPv6 addresses (':')
-		# Get rid of lines for link-local routes (https://superuser.com/a/1067742)
+		# Intended behavior, starting with `netstat -r -n` output:
+		# - keep lines starting with 'default' or '0.0.0.0', but exclude bogus routes '0.0.0.0/nn' where nn != 0
+		# - remove lines containing IPv6 addresses (':')
+		# - remove lines for link-local routes (https://superuser.com/a/1067742)
 		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
 	}
 
@@ -430,12 +420,12 @@ else # use route command
 		esac
 	}
 
-        set_vpngateway_route_attempt_reconnect() {
+	set_vpngateway_route_attempt_reconnect() {
 		case "$VPNGATEWAY" in
 		*:*)	route add $route_syntax_inet6_host "$VPNGATEWAY" $route_syntax_gw "`get_ipv6_default_gw_excl_tunnel`";;
 		*)	route add -host "$VPNGATEWAY" $route_syntax_gw "`get_default_gw_excl_tunnel`";;
 		esac
-        }
+	}
 
 	del_vpngateway_route() {
 		case "$VPNGATEWAY" in
@@ -508,8 +498,10 @@ else # use route command
 	}
 
 	get_ipv6_default_gw() {
-		# isn't -n supposed to give --numeric output?
-		# apperently not...
+		# Intended behavior, starting with `netstat -r -n` IPv6 output:
+		# - keep lines starting with 'default' or '::'
+		# - append %$interface to link-local routes (fe80::/10)
+		# - remove lines for loopback interface (lo)
 		# FIXME: is there a better way to exclude loopback routes than filtering interface /^lo/?
 		netstat -r -n $netstat_syntax_ipv6 | awk '/^(default|::\/0)/ { if ($NF!~/^lo/) { print ($2~/^fe[89ab]/ ? $2"%"$NF : $2); } }'
 	}
@@ -914,28 +906,12 @@ restore_resolvconf_unbound() {
 
 # ========= Toplevel state handling  =======================================
 
-kernel_is_2_6_or_above() {
-	case `uname -r` in
-		1.*|2.[012345]*)
-			return 1
-			;;
-		*)
-			return 0
-			;;
-	esac
-}
-
 do_pre_init() {
 	if [ "$OS" = "Linux" ]; then
 		if (exec 6< /dev/net/tun) > /dev/null 2>&1 ; then
 			:
 		else # can't open /dev/net/tun
 			test -e /proc/sys/kernel/modprobe && `cat /proc/sys/kernel/modprobe` tun 2>/dev/null
-			# fix for broken devfs in kernel 2.6.x
-			if [ "`readlink /dev/net/tun`" = misc/net/tun \
-				-a ! -e /dev/net/misc/net/tun -a -e /dev/misc/net/tun ] ; then
-				ln -sf /dev/misc/net/tun /dev/net/tun
-			fi
 			# make sure tun device exists
 			if [ ! -e /dev/net/tun ]; then
 				mkdir -p /dev/net
@@ -943,12 +919,10 @@ do_pre_init() {
 				[ -x /sbin/restorecon ] && /sbin/restorecon /dev/net/tun
 			fi
 			# workaround for a possible latency caused by udev, sleep max. 10s
-			if kernel_is_2_6_or_above ; then
-				for x in `seq 100` ; do
-					(exec 6<> /dev/net/tun) > /dev/null 2>&1 && break;
-					sleep 0.1
-				done
-			fi
+			for x in $(seq 100) ; do
+				(exec 6<> /dev/net/tun) > /dev/null 2>&1 && break;
+				sleep 0.1
+			done
 		fi
 	elif [ "$OS" = "FreeBSD" -o "$OS" = "DragonFly" ]; then
 		if ! ifconfig $TUNDEV > /dev/null; then
@@ -1149,11 +1123,18 @@ do_disconnect() {
 		ifconfig "$TUNDEV" down
 	fi
 
-	destroy_tun_device
+	case "$OS" in
+	NetBSD|OpenBSD) # and probably others...
+		ifconfig "$TUNDEV" destroy
+		;;
+	FreeBSD|DragonFly)
+		ifconfig "$TUNDEV" destroy > /dev/null 2>&1 &
+		;;
+	esac
 }
 
 do_attempt_reconnect() {
-        set_vpngateway_route_attempt_reconnect
+	set_vpngateway_route_attempt_reconnect
 }
 
 #### Main
