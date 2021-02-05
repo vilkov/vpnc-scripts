@@ -402,12 +402,12 @@ else # use route command
 		# - keep lines starting with 'default' or '0.0.0.0', but exclude bogus routes '0.0.0.0/nn' where nn != 0
 		# - remove lines containing IPv6 addresses (':')
 		# - remove lines for link-local routes (https://superuser.com/a/1067742)
-		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
+		netstat -r -n | awk '/:/ { next; } /link#/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
 	}
 
 	get_default_gw_excl_tunnel() {
 		# Get rid of lines containing $TUNDEV (we don't want loopback)
-		netstat -r -n | awk '/:/ { next; } /link\#/ { next; } /[[:space:]]'"$TUNDEV"'([[:space:]]|$)/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
+		netstat -r -n | awk '/:/ { next; } /link#/ { next; } /[[:space:]]'"$TUNDEV"'([[:space:]]|$)/ { next; } /^(default|0\.0\.0\.0([[:space:]]|\/0))/ { print $2; exit; }'
 	}
 
 	set_vpngateway_route() {
