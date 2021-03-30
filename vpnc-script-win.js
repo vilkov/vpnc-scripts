@@ -95,6 +95,7 @@ case "connect":
     }
 
     // Add direct route for the VPN gateway to avoid routing loops
+    // FIXME: handle IPv6 gateway address
     run("route add " + env("VPNGATEWAY") +
             " mask 255.255.255.255 " + gw);
 
@@ -188,6 +189,9 @@ case "connect":
             run("netsh interface ipv6 add route 2000::/3 \"" + env("TUNDEV") +
                 "\" store=active");
         }
+
+        // FIXME: handle IPv6 split-excludes
+
         echo("IPv6 route configuration done.");
     }
 
@@ -199,6 +203,7 @@ case "connect":
     break;
 case "disconnect":
     // Delete direct route for the VPN gateway
+    // FIXME: handle IPv6 gateway address
     run("route delete " + env("VPNGATEWAY") + " mask 255.255.255.255");
 
     // Delete Legacy IP split-exclude routes
@@ -210,4 +215,6 @@ case "disconnect":
             exec("route delete " + network + " mask " + netmask );
         }
     }
+
+    // FIXME: handle IPv6 split-excludes
 }
