@@ -147,6 +147,17 @@ case "connect":
             run("route add 128.0.0.0 mask 128.0.0.0 " + internal_gw);
         }
     }
+
+    // Add excluded routes
+    if (env("CISCO_SPLIT_EXC")) {
+        for (var i = 0 ; i < parseInt(env("CISCO_SPLIT_EXC")); i++) {
+            var network = env("CISCO_SPLIT_EXC_" + i + "_ADDR");
+            var netmask = env("CISCO_SPLIT_EXC_" + i + "_MASK");
+            var netmasklen = env("CISCO_SPLIT_EXC_" + i + "_MASKLEN");
+            run("route add " + network + " mask " + netmask +
+                " " + gw);
+        }
+    }
     echo("Legacy IP route configuration done.");
 
     if (env("INTERNAL_IP6_ADDRESS")) {
@@ -189,4 +200,14 @@ case "connect":
 case "disconnect":
     // Delete direct route for the VPN gateway
     run("route delete " + env("VPNGATEWAY") + " mask 255.255.255.255");
+
+    // Delete Legacy IP split-exclude routes
+    if (env("CISCO_SPLIT_EXC")) {
+        for (var i = 0 ; i < parseInt(env("CISCO_SPLIT_EXC")); i++) {
+            var network = env("CISCO_SPLIT_EXC_" + i + "_ADDR");
+            var netmask = env("CISCO_SPLIT_EXC_" + i + "_MASK");
+            var netmasklen = env("CISCO_SPLIT_EXC_" + i + "_MASKLEN");
+            exec("route delete " + network + " mask " + netmask );
+        }
+    }
 }
