@@ -101,7 +101,7 @@ case "connect":
     if (env("INTERNAL_IP4_NBNS")) {
         var wins = env("INTERNAL_IP4_NBNS").split(/ /);
         for (var i = 0; i < wins.length; i++) {
-                    run("netsh interface ip add wins \"" +
+            run("netsh interface ip add wins \"" +
                 env("TUNDEV") + "\" " + wins[i]
                 + " index=" + (i+1));
         }
@@ -121,7 +121,7 @@ case "connect":
     // Add internal network routes
     echo("Configuring Legacy IP networks:");
     if (env("CISCO_SPLIT_INC")) {
-        // Waiting for the interface to be configured before to add routes
+        // Waiting for the interface to be configured before adding include routes
         if (!waitForInterface()) {
             echo("Interface does not seem to be up.");
         }
@@ -135,7 +135,7 @@ case "connect":
                 " " + internal_gw + " if " + env("TUNIDX"));
         }
     } else if (REDIRECT_GATEWAY_METHOD > 0) {
-        // Waiting for the interface to be configured before to add routes
+        // Waiting for the interface to be configured before adding default route
         if (!waitForInterface()) {
             echo("Interface does not seem to be up.");
         }
@@ -147,9 +147,9 @@ case "connect":
             run("route add 128.0.0.0 mask 128.0.0.0 " + internal_gw);
         }
     }
-    echo("Route configuration done.");
+    echo("Legacy IP route configuration done.");
 
-        if (env("INTERNAL_IP6_ADDRESS")) {
+    if (env("INTERNAL_IP6_ADDRESS")) {
         echo("Configuring \"" + env("TUNDEV") + "\" interface for IPv6...");
 
         run("netsh interface ipv6 set address \"" + env("TUNDEV") + "\" " +
@@ -158,13 +158,13 @@ case "connect":
         echo("done.");
 
         // Add internal network routes
-            echo("Configuring IPv6 networks:");
-            if (env("INTERNAL_IP6_NETMASK") && !env("INTERNAL_IP6_NETMASK").match("/128$")) {
+        echo("Configuring IPv6 networks:");
+        if (env("INTERNAL_IP6_NETMASK") && !env("INTERNAL_IP6_NETMASK").match("/128$")) {
             run("netsh interface ipv6 add route " + env("INTERNAL_IP6_NETMASK") +
-                " \"" + env("TUNDEV") + "\" store=active")
+                " \"" + env("TUNDEV") + "\" store=active");
         }
 
-            if (env("CISCO_IPV6_SPLIT_INC")) {
+        if (env("CISCO_IPV6_SPLIT_INC")) {
             for (var i = 0 ; i < parseInt(env("CISCO_IPV6_SPLIT_INC")); i++) {
                 var network = env("CISCO_IPV6_SPLIT_INC_" + i + "_ADDR");
                 var netmasklen = env("CISCO_SPLIT_INC_" + i +
@@ -187,6 +187,6 @@ case "connect":
     }
     break;
 case "disconnect":
-    // Delete direct route for the VPN gateway to avoid
+    // Delete direct route for the VPN gateway
     run("route delete " + env("VPNGATEWAY") + " mask 255.255.255.255");
 }
