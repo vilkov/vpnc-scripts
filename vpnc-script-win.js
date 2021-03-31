@@ -25,18 +25,6 @@ function getDefaultGateway()
     return ("");
 }
 
-function waitForInterface() {
-    var if_route = new RegExp(env("INTERNAL_IP4_ADDRESS") + " *255.255.255.255");
-    for (var i = 0; i < 5; i++) {
-        echo("Waiting for interface to come up...");
-        WScript.Sleep(2000);
-        if (run("route print").match(if_route)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 // --------------------------------------------------------------
 // Script starts here
 // --------------------------------------------------------------
@@ -66,31 +54,33 @@ case "connect":
     echo("Internal Address: " + env("INTERNAL_IP4_ADDRESS"));
     echo("Internal Netmask: " + env("INTERNAL_IP4_NETMASK"));
     echo("Internal Gateway: " + internal_gw);
-    echo("Interface: \"" + env("TUNDEV") + "\"");
+    echo("Interface: \"" + env("TUNDEV") + "\" / " + env("TUNIDX"));
+
 
     if (env("INTERNAL_IP4_MTU")) {
         echo("MTU: " + env("INTERNAL_IP4_MTU"));
-        run("netsh interface ipv4 set subinterface \"" + env("TUNDEV") +
-        "\" mtu=" + env("INTERNAL_IP4_MTU") + " store=active");
+        run("netsh interface ipv4 set subinterface " + env("TUNIDX") +
+            " mtu=" + env("INTERNAL_IP4_MTU") + " store=active");
+
         if (env("INTERNAL_IP6_ADDRESS")) {
-        run("netsh interface ipv6 set subinterface \"" + env("TUNDEV") +
-            "\" mtu=" + env("INTERNAL_IP4_MTU") + " store=active");
+            run("netsh interface ipv6 set subinterface " + env("TUNIDX") +
+                " mtu=" + env("INTERNAL_IP4_MTU") + " store=active");
         }
     }
 
-    echo("Configuring \"" + env("TUNDEV") + "\" interface for Legacy IP...");
+    echo("Configuring \"" + env("TUNDEV") + "\" / " + env("TUNIDX") + " interface for Legacy IP...");
 
     if (!env("CISCO_SPLIT_INC") && REDIRECT_GATEWAY_METHOD != 2) {
         // Interface metric must be set to 1 in order to add a route with metric 1 since Windows Vista
-        run("netsh interface ip set interface \"" + env("TUNDEV") + "\" metric=1");
+        run("netsh interface ip set interface \"" + env("TUNIDX") + "\" metric=1");
     }
 
     if (env("CISCO_SPLIT_INC") || REDIRECT_GATEWAY_METHOD > 0) {
-        run("netsh interface ip set address \"" + env("TUNDEV") + "\" static " +
+        run("netsh interface ip set address \"" + env("TUNIDX") + "\" static " +
             env("INTERNAL_IP4_ADDRESS") + " " + env("INTERNAL_IP4_NETMASK"));
     } else {
         // The default route will be added automatically
-        run("netsh interface ip set address \"" + env("TUNDEV") + "\" static " +
+        run("netsh interface ip set address \"" + env("TUNIDX") + "\" static " +
             env("INTERNAL_IP4_ADDRESS") + " " + env("INTERNAL_IP4_NETMASK") + " " + internal_gw + " 1");
     }
 
@@ -102,8 +92,8 @@ case "connect":
     if (env("INTERNAL_IP4_NBNS")) {
         var wins = env("INTERNAL_IP4_NBNS").split(/ /);
         for (var i = 0; i < wins.length; i++) {
-            run("netsh interface ip add wins \"" +
-                env("TUNDEV") + "\" " + wins[i]
+            run("netsh interface ip add wins " +
+                env("TUNIDX") + " " + wins[i]
                 + " index=" + (i+1));
         }
     }
@@ -112,8 +102,8 @@ case "connect":
         var dns = env("INTERNAL_IP4_DNS").split(/ /);
         for (var i = 0; i < dns.length; i++) {
             var protocol = dns[i].indexOf(":") !== -1 ? "ipv6" : "ipv4";
-            run("netsh interface " + protocol + " add dns \"" +
-                env("TUNDEV") + "\" " + dns[i]
+            run("netsh interface " + protocol + " add dns " +
+                env("TUNIDX") + " " + dns[i]
                 + " index=" + (i+1));
         }
     }
@@ -122,11 +112,6 @@ case "connect":
     // Add internal network routes
     echo("Configuring Legacy IP networks:");
     if (env("CISCO_SPLIT_INC")) {
-        // Waiting for the interface to be configured before adding include routes
-        if (!waitForInterface()) {
-            echo("Interface does not seem to be up.");
-        }
-
         for (var i = 0 ; i < parseInt(env("CISCO_SPLIT_INC")); i++) {
             var network = env("CISCO_SPLIT_INC_" + i + "_ADDR");
             var netmask = env("CISCO_SPLIT_INC_" + i + "_MASK");
@@ -135,18 +120,11 @@ case "connect":
             run("route add " + network + " mask " + netmask +
                 " " + internal_gw + " if " + env("TUNIDX"));
         }
-    } else if (REDIRECT_GATEWAY_METHOD > 0) {
-        // Waiting for the interface to be configured before adding default route
-        if (!waitForInterface()) {
-            echo("Interface does not seem to be up.");
-        }
-
-        if (REDIRECT_GATEWAY_METHOD == 1) {
-            run("route add 0.0.0.0 mask 0.0.0.0 " + internal_gw + " metric 1");
-        } else {
-            run("route add 0.0.0.0 mask 128.0.0.0 " + internal_gw);
-            run("route add 128.0.0.0 mask 128.0.0.0 " + internal_gw);
-        }
+    } else if (REDIRECT_GATEWAY_METHOD == 1) {
+        run("route add 0.0.0.0 mask 0.0.0.0 " + internal_gw + " metric 1");
+    } else if (REDIRECT_GATEWAY_METHOD == 2) {
+        run("route add 0.0.0.0 mask 128.0.0.0 " + internal_gw);
+        run("route add 128.0.0.0 mask 128.0.0.0 " + internal_gw);
     }
 
     // Add excluded routes
@@ -162,9 +140,9 @@ case "connect":
     echo("Legacy IP route configuration done.");
 
     if (env("INTERNAL_IP6_ADDRESS")) {
-        echo("Configuring \"" + env("TUNDEV") + "\" interface for IPv6...");
+        echo("Configuring \"" + env("TUNDEV") + "\" / " + env("TUNIDX") + " interface for IPv6...");
 
-        run("netsh interface ipv6 set address \"" + env("TUNDEV") + "\" " +
+        run("netsh interface ipv6 set address " + env("TUNIDX") + " " +
             env("INTERNAL_IP6_ADDRESS") + " store=active");
 
         echo("done.");
@@ -173,7 +151,7 @@ case "connect":
         echo("Configuring IPv6 networks:");
         if (env("INTERNAL_IP6_NETMASK") && !env("INTERNAL_IP6_NETMASK").match("/128$")) {
             run("netsh interface ipv6 add route " + env("INTERNAL_IP6_NETMASK") +
-                " \"" + env("TUNDEV") + "\" store=active");
+                " " + env("TUNIDX") + " store=active");
         }
 
         if (env("CISCO_IPV6_SPLIT_INC")) {
@@ -182,12 +160,12 @@ case "connect":
                 var netmasklen = env("CISCO_SPLIT_INC_" + i +
                          "_MASKLEN");
                 run("netsh interface ipv6 add route " + network + "/" +
-                    netmasklen + " \"" + env("TUNDEV") + "\" store=active")
+                    netmasklen + " " + env("TUNIDX") + " store=active")
             }
         } else {
             echo("Setting default IPv6 route through VPN.");
-            run("netsh interface ipv6 add route 2000::/3 \"" + env("TUNDEV") +
-                "\" store=active");
+            run("netsh interface ipv6 add route 2000::/3 " + env("TUNIDX") +
+                " store=active");
         }
 
         // FIXME: handle IPv6 split-excludes
