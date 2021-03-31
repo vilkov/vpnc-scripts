@@ -88,16 +88,17 @@ case "connect":
 
     if (!env("CISCO_SPLIT_INC") && REDIRECT_GATEWAY_METHOD != 2) {
         // Interface metric must be set to 1 in order to add a route with metric 1 since Windows Vista
-        run("netsh interface ip set interface \"" + env("TUNIDX") + "\" metric=1");
+        run("netsh interface ip set interface \"" + env("TUNIDX") + "\" metric=1 store=active");
     }
 
     if (env("CISCO_SPLIT_INC") || REDIRECT_GATEWAY_METHOD > 0) {
         run("netsh interface ip set address \"" + env("TUNIDX") + "\" static " +
-            env("INTERNAL_IP4_ADDRESS") + " " + env("INTERNAL_IP4_NETMASK"));
+            env("INTERNAL_IP4_ADDRESS") + " " + env("INTERNAL_IP4_NETMASK") + " store=active");
     } else {
         // The default route will be added automatically
         run("netsh interface ip set address \"" + env("TUNIDX") + "\" static " +
-            env("INTERNAL_IP4_ADDRESS") + " " + env("INTERNAL_IP4_NETMASK") + " " + internal_gw + " 1");
+            env("INTERNAL_IP4_ADDRESS") + " " + env("INTERNAL_IP4_NETMASK") + " " + internal_gw +
+            " gwmetric=1 store=active");
     }
 
     // Add direct route for the VPN gateway to avoid routing loops
@@ -200,6 +201,14 @@ case "disconnect":
     // Delete direct route for the VPN gateway
     // FIXME: handle IPv6 gateway address
     run("route delete " + env("VPNGATEWAY") + " mask 255.255.255.255");
+
+    // Delete address
+    run("netsh interface ipv4 del address " + env("TUNIDX") + " " +
+        env("INTERNAL_IP4_ADDRESS") + " gateway=all");
+    if (env("INTERNAL_IP6_ADDRESS")) {
+        run("netsh interface ipv6 del address " + env("TUNIDX") + " " +
+            env("INTERNAL_IP6_ADDRESS"));
+    }
 
     // Delete Legacy IP split-exclude routes
     if (env("CISCO_SPLIT_EXC")) {
