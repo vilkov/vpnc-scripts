@@ -105,22 +105,23 @@ case "connect":
     run("route add " + env("VPNGATEWAY") +
             " mask 255.255.255.255 " + gw);
 
+    run("netsh interface ipv4 del wins " + env("TUNIDX") + " all");
     if (env("INTERNAL_IP4_NBNS")) {
         var wins = env("INTERNAL_IP4_NBNS").split(/ /);
         for (var i = 0; i < wins.length; i++) {
-            run("netsh interface ip add wins " +
-                env("TUNIDX") + " " + wins[i]
-                + " index=" + (i+1));
+            run("netsh interface ipv4 add wins " +
+                env("TUNIDX") + " " + wins[i]);
         }
     }
 
+    run("netsh interface ipv4 del dns " + env("TUNIDX") + " all");
+    run("netsh interface ipv6 del dns " + env("TUNIDX") + " all");
     if (env("INTERNAL_IP4_DNS")) {
         var dns = env("INTERNAL_IP4_DNS").split(/ /);
         for (var i = 0; i < dns.length; i++) {
             var protocol = dns[i].indexOf(":") !== -1 ? "ipv6" : "ipv4";
             run("netsh interface " + protocol + " add dns " +
-                env("TUNIDX") + " " + dns[i]
-                + " index=" + (i+1));
+                env("TUNIDX") + " " + dns[i]);
         }
     }
     echo("done.");
