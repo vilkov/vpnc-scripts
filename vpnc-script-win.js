@@ -4,6 +4,21 @@
 // needed by vpnc.
 
 // --------------------------------------------------------------
+// Initial setup
+// --------------------------------------------------------------
+
+var accumulatedExitCode = 0;
+var ws = WScript.CreateObject("WScript.Shell");
+var env = ws.Environment("Process");
+var comspec = ws.ExpandEnvironmentStrings("%comspec%");
+
+// How to add the default internal route
+// 0 - As interface gateway when setting properties
+// 1 - As a 0.0.0.0/0 route with a lower metric than the default route
+// 2 - As 0.0.0.0/1 + 128.0.0.0/1 routes (override the default route cleanly)
+var REDIRECT_GATEWAY_METHOD = 0;
+
+// --------------------------------------------------------------
 // Utilities
 // --------------------------------------------------------------
 
@@ -14,7 +29,19 @@ function echo(msg)
 
 function run(cmd)
 {
-    return (ws.Exec(cmd).StdOut.ReadAll());
+    var oExec = ws.Exec(comspec + " /C \"" + cmd + "\" 2>&1");
+    oExec.StdIn.Close();
+
+    var s = oExec.StdOut.ReadAll();
+
+    var exitCode = oExec.ExitCode;
+    if (exitCode != 0) {
+        echo("\"" + cmd + "\" returned non-zero exit status: " + exitCode + ")");
+        echo("   stdout+stderr dump: " + s);
+    }
+    accumulatedExitCode += exitCode;
+
+    return s;
 }
 
 function getDefaultGateway()
@@ -28,17 +55,6 @@ function getDefaultGateway()
 // --------------------------------------------------------------
 // Script starts here
 // --------------------------------------------------------------
-
-var internal_ip4_netmask = "255.255.255.0"
-
-var ws = WScript.CreateObject("WScript.Shell");
-var env = ws.Environment("Process");
-
-// How to add the default internal route
-// 0 - As interface gateway when setting properties
-// 1 - As a 0.0.0.0/0 route with a lower metric than the default route
-// 2 - As 0.0.0.0/1 + 128.0.0.0/1 routes (override the default route cleanly)
-var REDIRECT_GATEWAY_METHOD = 0;
 
 switch (env("reason")) {
 case "pre-init":
@@ -196,3 +212,4 @@ case "disconnect":
 
     // FIXME: handle IPv6 split-excludes
 }
+WScript.Quit(accumulatedExitCode);
