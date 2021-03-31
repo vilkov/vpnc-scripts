@@ -1,7 +1,6 @@
 // vpnc-script-win.js
 //
-// Sets up the Network interface and the routes
-// needed by vpnc.
+// Routing, IP, and DNS configuration script for OpenConnect.
 
 // --------------------------------------------------------------
 // Initial setup
@@ -103,16 +102,15 @@ case "connect":
 
     // Add direct route for the VPN gateway to avoid routing loops
     // FIXME: handle IPv6 gateway address
-    run("route add " + env("VPNGATEWAY") +
-            " mask 255.255.255.255 " + gw);
+    run("route add " + env("VPNGATEWAY") + " mask 255.255.255.255 " + gw);
 
     run("netsh interface ipv4 del wins " + env("TUNIDX") + " all");
     if (env("INTERNAL_IP4_NBNS")) {
         var wins = env("INTERNAL_IP4_NBNS").split(/ /);
         for (var i = 0; i < wins.length; i++) {
-            run("netsh interface ipv4 add wins " +
-                env("TUNIDX") + " " + wins[i]);
+            run("netsh interface ipv4 add wins " + env("TUNIDX") + " " + wins[i]);
         }
+        echo("Configured " + wins.length + " WINS servers: " + wins.join(" "));
     }
 
     run("netsh interface ipv4 del dns " + env("TUNIDX") + " all");
@@ -121,9 +119,9 @@ case "connect":
         var dns = env("INTERNAL_IP4_DNS").split(/ /);
         for (var i = 0; i < dns.length; i++) {
             var protocol = dns[i].indexOf(":") !== -1 ? "ipv6" : "ipv4";
-            run("netsh interface " + protocol + " add dns " +
-                env("TUNIDX") + " " + dns[i]);
+            run("netsh interface " + protocol + " add dns " + env("TUNIDX") + " " + dns[i]);
         }
+        echo("Configured " + dns.length + " DNS servers: " + dns.join(" "));
     }
     echo("done.");
 
@@ -133,16 +131,18 @@ case "connect":
         for (var i = 0 ; i < parseInt(env("CISCO_SPLIT_INC")); i++) {
             var network = env("CISCO_SPLIT_INC_" + i + "_ADDR");
             var netmask = env("CISCO_SPLIT_INC_" + i + "_MASK");
-            var netmasklen = env("CISCO_SPLIT_INC_" + i +
-                     "_MASKLEN");
+            var netmasklen = env("CISCO_SPLIT_INC_" + i + "_MASKLEN");
             run("route add " + network + " mask " + netmask +
                 " " + internal_gw + " if " + env("TUNIDX"));
+            echo("Configured Legacy IP split-include route: " + network + "/" + netmasklen);
         }
     } else if (REDIRECT_GATEWAY_METHOD == 1) {
         run("route add 0.0.0.0 mask 0.0.0.0 " + internal_gw + " metric 1");
+        echo("Configured Legacy IP default route.");
     } else if (REDIRECT_GATEWAY_METHOD == 2) {
         run("route add 0.0.0.0 mask 128.0.0.0 " + internal_gw);
         run("route add 128.0.0.0 mask 128.0.0.0 " + internal_gw);
+        echo("Configured Legacy IP default route pair (0.0.0.0/1, 128.0.0.0/1)");
     }
 
     // Add excluded routes
@@ -151,8 +151,8 @@ case "connect":
             var network = env("CISCO_SPLIT_EXC_" + i + "_ADDR");
             var netmask = env("CISCO_SPLIT_EXC_" + i + "_MASK");
             var netmasklen = env("CISCO_SPLIT_EXC_" + i + "_MASKLEN");
-            run("route add " + network + " mask " + netmask +
-                " " + gw);
+            run("route add " + network + " mask " + netmask + " " + gw);
+            echo("Configured Legacy IP split-exclude route: " + network + "/" + netmasklen);
         }
     }
     echo("Legacy IP route configuration done.");
@@ -160,8 +160,7 @@ case "connect":
     if (env("INTERNAL_IP6_ADDRESS")) {
         echo("Configuring \"" + env("TUNDEV") + "\" / " + env("TUNIDX") + " interface for IPv6...");
 
-        run("netsh interface ipv6 set address " + env("TUNIDX") + " " +
-            env("INTERNAL_IP6_ADDRESS") + " store=active");
+        run("netsh interface ipv6 set address " + env("TUNIDX") + " " + env("INTERNAL_IP6_ADDRESS") + " store=active");
 
         echo("done.");
 
@@ -175,15 +174,14 @@ case "connect":
         if (env("CISCO_IPV6_SPLIT_INC")) {
             for (var i = 0 ; i < parseInt(env("CISCO_IPV6_SPLIT_INC")); i++) {
                 var network = env("CISCO_IPV6_SPLIT_INC_" + i + "_ADDR");
-                var netmasklen = env("CISCO_SPLIT_INC_" + i +
-                         "_MASKLEN");
+                var netmasklen = env("CISCO_SPLIT_INC_" + i + "_MASKLEN");
                 run("netsh interface ipv6 add route " + network + "/" +
                     netmasklen + " " + env("TUNIDX") + " store=active")
+                echo("Configured IPv6 split-include route: " + network + "/" + netmasklen);
             }
         } else {
             echo("Setting default IPv6 route through VPN.");
-            run("netsh interface ipv6 add route 2000::/3 " + env("TUNIDX") +
-                " store=active");
+            run("netsh interface ipv6 add route 2000::/3 " + env("TUNIDX") + " store=active");
         }
 
         // FIXME: handle IPv6 split-excludes
@@ -206,8 +204,7 @@ case "disconnect":
     run("netsh interface ipv4 del address " + env("TUNIDX") + " " +
         env("INTERNAL_IP4_ADDRESS") + " gateway=all");
     if (env("INTERNAL_IP6_ADDRESS")) {
-        run("netsh interface ipv6 del address " + env("TUNIDX") + " " +
-            env("INTERNAL_IP6_ADDRESS"));
+        run("netsh interface ipv6 del address " + env("TUNIDX") + " " + env("INTERNAL_IP6_ADDRESS"));
     }
 
     // Delete Legacy IP split-exclude routes
