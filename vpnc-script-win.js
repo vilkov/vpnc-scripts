@@ -174,7 +174,7 @@ case "connect":
         if (env("CISCO_IPV6_SPLIT_INC")) {
             for (var i = 0 ; i < parseInt(env("CISCO_IPV6_SPLIT_INC")); i++) {
                 var network = env("CISCO_IPV6_SPLIT_INC_" + i + "_ADDR");
-                var netmasklen = env("CISCO_SPLIT_INC_" + i + "_MASKLEN");
+                var netmasklen = env("CISCO_IPV6_SPLIT_INC_" + i + "_MASKLEN");
                 run("netsh interface ipv6 add route " + network + "/" +
                     netmasklen + " " + env("TUNIDX") + " store=active")
                 echo("Configured IPv6 split-include route: " + network + "/" + netmasklen);
