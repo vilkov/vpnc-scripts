@@ -147,41 +147,41 @@ else
 	RESOLVEDENABLED=0
 fi
 
-if [ -r /etc/openwrt_release ] && [ -n "$OPENWRT_INTERFACE" ]; then
-	. /etc/functions.sh
-	include /lib/network
-	MODIFYRESOLVCONF=modify_resolvconf_openwrt
-	RESTORERESOLVCONF=restore_resolvconf_openwrt
-elif [ -x /usr/bin/resolvectl ] && [ ${RESOLVEDENABLED} = 1 ]; then
-	# For systemd-resolved (version 239 and above)
-	MODIFYRESOLVCONF=modify_resolved_manager
-	RESTORERESOLVCONF=restore_resolved_manager
-elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
-	# For systemd-resolved (version 229 and above)
-	MODIFYRESOLVCONF=modify_resolved_manager_old
-	RESTORERESOLVCONF=restore_resolved_manager_old
-elif [ -x /sbin/resolvconf ] && [ "`basename $(readlink /sbin/resolvconf) 2> /dev/null`" != resolvectl ]; then
-	# Optional tool on Debian, Ubuntu, Gentoo, FreeBSD and DragonFly BSD
-	# (ignored if symlink to resolvctl, created by some versions of systemd-resolved)
-	MODIFYRESOLVCONF=modify_resolvconf_manager
-	RESTORERESOLVCONF=restore_resolvconf_manager
-elif [ -x /sbin/netconfig ] && [ ! -f /etc/slackware-version ]; then
-	# tool on Suse after 11.1
-	# Slackware's netconfig is an unrelated tool that should not be invoked here
-	# (see https://www.linuxquestions.org/questions/slackware-14/vpnc-on-slackware-14-2-is-bringing-up-network-configuration-dialog-each-time-4175595447/#post5646866)
-	MODIFYRESOLVCONF=modify_resolvconf_suse_netconfig
-	RESTORERESOLVCONF=restore_resolvconf_suse_netconfig
-elif [ -x /sbin/modify_resolvconf ]; then
-	# Mandatory tool on Suse earlier than 11.1
-	MODIFYRESOLVCONF=modify_resolvconf_suse
-	RESTORERESOLVCONF=restore_resolvconf_suse
-elif [ -x /usr/sbin/unbound-control ] && /usr/sbin/unbound-control status > /dev/null 2>&1; then
-	MODIFYRESOLVCONF=modify_resolvconf_unbound
-	RESTORERESOLVCONF=restore_resolvconf_unbound
-else # Generic for any OS
+#if [ -r /etc/openwrt_release ] && [ -n "$OPENWRT_INTERFACE" ]; then
+#	. /etc/functions.sh
+# 	include /lib/network
+# 	MODIFYRESOLVCONF=modify_resolvconf_openwrt
+# 	RESTORERESOLVCONF=restore_resolvconf_openwrt
+# elif [ -x /usr/bin/resolvectl ] && [ ${RESOLVEDENABLED} = 1 ]; then
+# 	# For systemd-resolved (version 239 and above)
+# 	MODIFYRESOLVCONF=modify_resolved_manager
+# 	RESTORERESOLVCONF=restore_resolved_manager
+# elif [ -x /usr/bin/busctl ] && [ ${RESOLVEDENABLED} = 1 ]; then
+# 	# For systemd-resolved (version 229 and above)
+# 	MODIFYRESOLVCONF=modify_resolved_manager_old
+# 	RESTORERESOLVCONF=restore_resolved_manager_old
+# elif [ -x /sbin/resolvconf ] && [ "`basename $(readlink /sbin/resolvconf) 2> /dev/null`" != resolvectl ]; then
+# 	# Optional tool on Debian, Ubuntu, Gentoo, FreeBSD and DragonFly BSD
+# 	# (ignored if symlink to resolvctl, created by some versions of systemd-resolved)
+# 	MODIFYRESOLVCONF=modify_resolvconf_manager
+# 	RESTORERESOLVCONF=restore_resolvconf_manager
+# elif [ -x /sbin/netconfig ] && [ ! -f /etc/slackware-version ]; then
+# 	# tool on Suse after 11.1
+# 	# Slackware's netconfig is an unrelated tool that should not be invoked here
+# 	# (see https://www.linuxquestions.org/questions/slackware-14/vpnc-on-slackware-14-2-is-bringing-up-network-configuration-dialog-each-time-4175595447/#post5646866)
+# 	MODIFYRESOLVCONF=modify_resolvconf_suse_netconfig
+# 	RESTORERESOLVCONF=restore_resolvconf_suse_netconfig
+# elif [ -x /sbin/modify_resolvconf ]; then
+# 	# Mandatory tool on Suse earlier than 11.1
+# 	MODIFYRESOLVCONF=modify_resolvconf_suse
+# 	RESTORERESOLVCONF=restore_resolvconf_suse
+# elif [ -x /usr/sbin/unbound-control ] && /usr/sbin/unbound-control status > /dev/null 2>&1; then
+# 	MODIFYRESOLVCONF=modify_resolvconf_unbound
+# 	RESTORERESOLVCONF=restore_resolvconf_unbound
+# else # Generic for any OS
 	MODIFYRESOLVCONF=modify_resolvconf_generic
 	RESTORERESOLVCONF=restore_resolvconf_generic
-fi
+#fi
 
 
 # =========== script hooks =================================================
